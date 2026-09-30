@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/academia_monitoramento.iml" filepath="$PROJECT_DIR$/academia_monitoramento.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/academia_monitoramento_android.iml" filepath="$PROJECT_DIR$/android/academia_monitoramento_android.iml" />
+    </modules>
+  </component>
+</project>

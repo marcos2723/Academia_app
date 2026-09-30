@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "370897621525",
+    "project_id": "academia-e2fbd",
+    "storage_bucket": "academia-e2fbd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:370897621525:android:c307dec9d584c4b172741c",
+        "android_client_info": {
+          "package_name": "com.example.academia_monitoramento"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfmTYbpd4AU1U0RTlC7Z2JPgxppl78SJQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

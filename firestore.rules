@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// Dois tipos de usuário:
+// - "personal": tem um documento em /personals/{uid}. Acesso completo a
+//   todos os alunos, planos, avaliações e agenda (é uma equipe só, da
+//   mesma academia).
+// - "aluno": reconhecido pelo campo authUid no seu próprio documento em
+//   /students. Só enxerga o próprio cadastro, as próprias avaliações e
+//   planos, e pode marcar/cancelar as próprias avaliações na agenda.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isPersonal() {
+      return request.auth != null && exists(/databases/$(database)/documents/personals/$(request.auth.uid));
+    }
+
+    function isOwnStudent(studentId) {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/students/$(studentId)).data.authUid == request.auth.uid;
+    }
+
+    match /personals/{uid} {
+      allow read: if request.auth != null;
+      // Criação: a própria pessoa provisiona seu perfil ao se auto-cadastrar,
+      // ou um personal já existente cria o perfil de um(a) colega.
+      allow create: if request.auth != null && (request.auth.uid == uid || isPersonal());
+      allow update, delete: if isPersonal();
+    }
+
+    match /students/{studentId} {
+      allow read: if request.auth != null &&
+        (isPersonal() || resource.data.authUid == request.auth.uid);
+      allow create, delete: if isPersonal();
+      // A própria personal edita tudo; o aluno só pode "destravar" o próprio
+      // aviso de troca de senha obrigatória (mustChangePassword), nada mais.
+      allow update: if isPersonal() ||
+        (request.auth != null &&
+         resource.data.authUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword']));
+    }
+
+    match /plans/{planId} {
+      allow read: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId));
+      allow write: if isPersonal();
+    }
+
+    match /plan_templates/{templateId} {
+      // Biblioteca de templates: só as personais usam (para montar planos
+      // dos alunos), aluno não precisa ver isso.
+      allow read, write: if isPersonal();
+    }
+
+    match /evaluations/{evaluationId} {
+      allow read: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId));
+      allow write: if isPersonal();
+    }
+
+    match /appointments/{appointmentId} {
+      // Leitura liberada para qualquer autenticado: um aluno precisa ver a
+      // agenda cheia de um personal para saber quais horários já estão
+      // ocupados antes de marcar o próprio.
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        (isPersonal() || isOwnStudent(request.resource.data.studentId));
+      allow update: if isPersonal();
+      allow delete: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId));
+    }
+
+    match /availability/{personalUid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == personalUid;
+    }
+
+    match /notifications/{notificationId} {
+      // Cada um só lê/marca como lida a própria notificação; qualquer
+      // autenticado pode CRIAR uma notificação para outra pessoa (é assim
+      // que um cancelamento avisa a outra parte).
+      allow read: if request.auth != null && resource.data.recipientUid == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.recipientUid == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}

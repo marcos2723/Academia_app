@@ -1,0 +1,24 @@
+name: academia_monitoramento
+description: Aplicativo para acompanhamento integrado de alunos de academia.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  firebase_core: ^4.12.0
+  firebase_auth: ^6.4.0
+  cloud_firestore: ^6.7.1
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.1
+  url_launcher: ^6.3.1
+  pdf: ^3.11.1
+  printing: ^5.13.4
+
+flutter:
+  uses-material-design: true
