@@ -36,6 +36,7 @@ typedef UpdateStudentCallback = Future<void> Function(
   required String observations,
   required String sex,
   required DateTime birthDate,
+  required bool active,
 });
 
 typedef AddPlanCallback = Future<void> Function({

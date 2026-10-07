@@ -6,6 +6,7 @@ import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/diet_pdf.dart';
+import '../../utils/training_pdf.dart';
 import '../../widgets/page_shell.dart';
 
 class AlunoPlansPage extends StatefulWidget {
@@ -40,6 +41,26 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
         ? 'dieta'
         : p.title.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
     final ok = await Printing.sharePdf(bytes: bytes, filename: 'dieta_$safeName.pdf')
+        .catchError((_) => false);
+    if (context.mounted && !ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não consegui salvar/compartilhar o PDF.')),
+      );
+    }
+  }
+
+  Future<void> _downloadTrainingPdf(Plan p) async {
+    final bytes = await buildTrainingPdf(
+      studentName: widget.student.name,
+      planTitle: p.title,
+      validity: '${formatDate(p.startDate)} a ${formatDate(p.endDate)}',
+      objective: widget.student.goal,
+      exercises: p.exercises,
+    );
+    final safeName = p.title.trim().isEmpty
+        ? 'treino'
+        : p.title.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+    final ok = await Printing.sharePdf(bytes: bytes, filename: 'treino_$safeName.pdf')
         .catchError((_) => false);
     if (context.mounted && !ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,6 +114,12 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
           ),
         ),
         actions: [
+          if (p.type == PlanType.training)
+            TextButton.icon(
+              onPressed: () => _downloadTrainingPdf(p),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Baixar PDF'),
+            ),
           if (p.type == PlanType.diet)
             TextButton.icon(
               onPressed: () => _downloadDietPdf(p),

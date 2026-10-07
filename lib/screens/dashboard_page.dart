@@ -62,7 +62,7 @@ class DashboardPage extends StatelessWidget {
       final current = lastEvaluationByStudent[e.studentId];
       if (current == null || e.date.isAfter(current)) lastEvaluationByStudent[e.studentId] = e.date;
     }
-    final staleStudents = students.map((s) {
+    final staleStudents = students.where((s) => s.active).map((s) {
       final last = lastEvaluationByStudent[s.id];
       final daysSince = last == null ? null : now.difference(last).inDays;
       return (student: s, daysSince: daysSince);
@@ -88,7 +88,7 @@ class DashboardPage extends StatelessWidget {
             spacing: 16,
             runSpacing: 16,
             children: [
-              MetricCard(label: 'Alunos ativos', value: '${students.length}', icon: Icons.people, color: kAlunosAccent),
+              MetricCard(label: 'Alunos ativos', value: '${students.where((s) => s.active).length}', icon: Icons.people, color: kAlunosAccent),
               MetricCard(
                 label: 'Avaliações neste mês',
                 value: '$evaluationsThisMonth',

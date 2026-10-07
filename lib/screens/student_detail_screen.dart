@@ -12,6 +12,7 @@ import '../utils/input_formatters.dart';
 import '../utils/evaluation_metrics.dart';
 import '../utils/app_colors.dart';
 import '../utils/diet_pdf.dart';
+import '../utils/training_pdf.dart';
 import '../utils/evolution_pdf.dart';
 import '../widgets/weight_chart.dart';
 import 'evaluation_form_screen.dart';
@@ -51,6 +52,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   late String goal = studentGoals.contains(widget.student.goal) ? widget.student.goal : studentGoals.first;
   late String sex = widget.student.sex;
   late DateTime birthDate = widget.student.birthDate;
+  late bool active = widget.student.active;
   int categoryIndex = 0;
 
   // Streams dedicados a ESTE aluno, criados uma única vez quando a tela
@@ -95,6 +97,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
       observations: observations.text.trim(),
       sex: sex,
       birthDate: birthDate,
+      active: active,
     );
     if (!mounted) return;
     setState(() {
@@ -168,6 +171,26 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     }
   }
 
+  Future<void> _downloadTrainingPdf(Plan p) async {
+    final bytes = await buildTrainingPdf(
+      studentName: widget.student.name,
+      planTitle: p.title,
+      validity: '${formatDate(p.startDate)} a ${formatDate(p.endDate)}',
+      objective: widget.student.goal,
+      exercises: p.exercises,
+    );
+    final safeName = p.title.trim().isEmpty
+        ? 'treino'
+        : p.title.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+    final ok = await Printing.sharePdf(bytes: bytes, filename: 'treino_$safeName.pdf')
+        .catchError((_) => false);
+    if (context.mounted && !ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não consegui salvar/compartilhar o PDF.')),
+      );
+    }
+  }
+
   void _showPlanDetails(Plan p, List<Plan> allPlansForStudent) {
     String? linkedTitle;
     if (p.linkedPlanId != null) {
@@ -215,6 +238,12 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
           ),
         ),
         actions: [
+          if (p.type == PlanType.training)
+            TextButton.icon(
+              onPressed: () => _downloadTrainingPdf(p),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Baixar PDF'),
+            ),
           if (p.type == PlanType.diet)
             TextButton.icon(
               onPressed: () => _downloadDietPdf(p),
@@ -277,6 +306,19 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
         child: ListView(
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Nome completo')),
+            const SizedBox(height: 10),
+            Card(
+              child: SwitchListTile(
+                title: const Text('Aluno ativo'),
+                subtitle: Text(
+                  active
+                      ? 'Matrícula ativa — aparece nas listas e métricas normalmente.'
+                      : 'Inativo — some das listas por padrão, mas o cadastro e o histórico continuam salvos.',
+                ),
+                value: active,
+                onChanged: (v) => setState(() => active = v),
+              ),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: phone,

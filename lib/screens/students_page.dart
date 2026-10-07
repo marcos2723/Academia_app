@@ -41,12 +41,25 @@ class StudentsPage extends StatefulWidget {
 
 class _StudentsPageState extends State<StudentsPage> {
   String query = '';
+  String? goalFilter;
+  bool sortByRecent = false;
+  bool showInactive = false;
 
   @override
   Widget build(BuildContext context) {
-    final students = widget.students
+    var students = widget.students
         .where((s) => s.name.toLowerCase().contains(query.toLowerCase()))
         .toList();
+    if (goalFilter != null) {
+      students = students.where((s) => s.goal == goalFilter).toList();
+    }
+    if (!showInactive) {
+      students = students.where((s) => s.active).toList();
+    }
+    students.sort((a, b) => sortByRecent
+        ? (b.createdAt ?? DateTime(2000)).compareTo(a.createdAt ?? DateTime(2000))
+        : a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final inactiveCount = widget.students.where((s) => !s.active).length;
     return PageShell(
       title: 'Alunos',
       subtitle: 'Cadastre, pesquise e atualize os dados de cada aluno.',
@@ -65,37 +78,111 @@ class _StudentsPageState extends State<StudentsPage> {
             ),
             onChanged: (value) => setState(() => query = value),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String?>(
+                  value: goalFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Filtrar por objetivo',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Todos os objetivos')),
+                    ...studentGoals.map((g) => DropdownMenuItem(value: g, child: Text(g))),
+                  ],
+                  onChanged: (v) => setState(() => goalFilter = v),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<bool>(
+                  value: sortByRecent,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Ordenar',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: false, child: Text('Nome (A-Z)')),
+                    DropdownMenuItem(value: true, child: Text('Mais recentes')),
+                  ],
+                  onChanged: (v) => setState(() => sortByRecent = v ?? false),
+                ),
+              ),
+            ],
+          ),
+          if (inactiveCount > 0) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                label: Text(showInactive ? 'Mostrando inativos' : 'Mostrar $inactiveCount inativo(s)'),
+                avatar: const Icon(Icons.visibility_outlined, size: 18),
+                selected: showInactive,
+                onSelected: (v) => setState(() => showInactive = v),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Expanded(
             child: students.isEmpty
-                ? const Center(child: Text('Nenhum aluno cadastrado ainda.'))
+                ? Center(
+                    child: Text(
+                      widget.students.isEmpty
+                          ? 'Nenhum aluno cadastrado ainda.'
+                          : 'Nenhum aluno encontrado com esse filtro.',
+                    ),
+                  )
                 : ListView.separated(
                     itemCount: students.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, index) {
                       final s = students[index];
                       return Card(
-                        child: ListTile(
-                          leading: CircleAvatar(child: Text(initials(s.name))),
-                          title: Text(s.name),
-                          subtitle: Text(
-                            '${s.goal} · ${s.weight.toStringAsFixed(1)} kg · ${s.height.toStringAsFixed(2)} m',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => StudentDetailScreen(
-                                student: s,
-                                service: widget.service,
-                                onUpdateStudent: widget.onUpdateStudent,
-                                onAddEvaluation: widget.onAddEvaluation,
-                                onAddPlan: widget.onAddPlan,
-                                templates: widget.templates,
-                                onSaveTemplate: widget.onSaveTemplate,
-                              ),
+                        child: Opacity(
+                          opacity: s.active ? 1 : 0.6,
+                          child: ListTile(
+                            leading: CircleAvatar(child: Text(initials(s.name))),
+                            title: Row(
+                              children: [
+                                Flexible(child: Text(s.name)),
+                                if (!s.active) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Text('Inativo', style: TextStyle(fontSize: 11)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            subtitle: Text(
+                              '${s.goal} · ${s.weight.toStringAsFixed(1)} kg · ${s.height.toStringAsFixed(2)} m',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StudentDetailScreen(
+                                  student: s,
+                                  service: widget.service,
+                                  onUpdateStudent: widget.onUpdateStudent,
+                                  onAddEvaluation: widget.onAddEvaluation,
+                                  onAddPlan: widget.onAddPlan,
+                                  templates: widget.templates,
+                                  onSaveTemplate: widget.onSaveTemplate,
+                                ),
                             ),
                           ),
+                        ),
                         ),
                       );
                     },

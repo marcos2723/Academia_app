@@ -15,6 +15,7 @@ class Student {
     this.authUid,
     this.mustChangePassword = false,
     this.createdAt,
+    this.active = true,
   });
 
   final String id;
@@ -38,6 +39,11 @@ class Student {
   /// Quando o cadastro foi criado. Null para alunos antigos, cadastrados
   /// antes deste campo existir.
   final DateTime? createdAt;
+
+  /// false para um aluno desligado/inativo (matrícula trancada etc.) — o
+  /// cadastro e o histórico continuam existindo, só fica marcado como
+  /// inativo em vez de excluído.
+  final bool active;
 
   double get bmi => height <= 0 ? 0 : weight / (height * height);
 
@@ -66,6 +72,7 @@ class Student {
       authUid: data['authUid'] as String?,
       mustChangePassword: data['mustChangePassword'] as bool? ?? false,
       createdAt: created?.toDate(),
+      active: data['active'] as bool? ?? true,
     );
   }
 
@@ -83,6 +90,7 @@ class Student {
         'authUid': authUid,
         'mustChangePassword': mustChangePassword,
         'createdAt': FieldValue.serverTimestamp(),
+        'active': true,
       };
 
   Map<String, dynamic> toUpdateMap() => {
@@ -95,5 +103,6 @@ class Student {
         'observations': observations,
         'sex': sex,
         'birthDate': Timestamp.fromDate(birthDate),
+        'active': active,
       };
 }

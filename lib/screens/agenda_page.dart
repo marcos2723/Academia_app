@@ -154,6 +154,16 @@ class _AgendaPageState extends State<AgendaPage> {
                         setDialogState(() => errorText = 'Não é possível agendar um horário no passado.');
                         return;
                       }
+                      final conflict = widget.appointments.where(
+                        (a) =>
+                            a.personalUid == widget.currentPersonalUid &&
+                            a.dateTime.difference(dt).abs() < const Duration(minutes: 30),
+                      );
+                      if (conflict.isNotEmpty) {
+                        setDialogState(() => errorText =
+                            'Você já tem uma avaliação marcada às ${formatTime(conflict.first.dateTime)}. Escolha outro horário.');
+                        return;
+                      }
                       setDialogState(() {
                         saving = true;
                         errorText = null;

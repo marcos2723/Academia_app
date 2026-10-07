@@ -134,6 +134,7 @@ class FirestoreService {
     required String observations,
     required String sex,
     required DateTime birthDate,
+    required bool active,
   }) {
     return _students.doc(studentId).update(
           Student(
@@ -147,6 +148,7 @@ class FirestoreService {
             observations: observations,
             sex: sex,
             birthDate: birthDate,
+            active: active,
           ).toUpdateMap(),
         );
   }
