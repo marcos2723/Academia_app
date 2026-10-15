@@ -62,7 +62,7 @@ class _StudentsPageState extends State<StudentsPage> {
     final inactiveCount = widget.students.where((s) => !s.active).length;
     return PageShell(
       title: 'Alunos',
-      subtitle: 'Cadastre, pesquise e atualize os dados de cada aluno.',
+      subtitle: 'Cadastro e busca de alunos.',
       action: FilledButton.icon(
         onPressed: () => _openStudentForm(context),
         icon: const Icon(Icons.add),
@@ -165,7 +165,7 @@ class _StudentsPageState extends State<StudentsPage> {
                               ],
                             ),
                             subtitle: Text(
-                              '${s.goal} · ${s.weight.toStringAsFixed(1)} kg · ${s.height.toStringAsFixed(2)} m',
+                              'Objetivo: ${s.goal} · Peso: ${s.weight.toStringAsFixed(1)} kg · Altura: ${s.height.toStringAsFixed(2)} m',
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => Navigator.push(

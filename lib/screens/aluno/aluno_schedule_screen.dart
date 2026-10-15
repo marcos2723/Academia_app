@@ -111,9 +111,8 @@ class _AlunoScheduleScreenState extends State<AlunoScheduleScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Muito perto do horário'),
           content: const Text(
-            'Faltam menos de 3 horas para essa avaliação. Cancelamentos precisam ser feitos com '
-            'pelo menos 3 horas de antecedência — fale diretamente com seu personal se for '
-            'realmente necessário.',
+            'Faltam menos de 3 horas. Cancelamentos exigem 3 horas de antecedência — '
+            'fale direto com seu personal.',
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi'))],
         ),
@@ -160,7 +159,7 @@ class _AlunoScheduleScreenState extends State<AlunoScheduleScreen> {
         }
         return PageShell(
           title: 'Agendar avaliação',
-          subtitle: 'Escolha o personal, a data e um horário disponível.',
+          subtitle: 'Escolha personal, data e horário.',
           child: ListView(
             children: [
               StreamBuilder<List<Appointment>>(
@@ -187,8 +186,8 @@ class _AlunoScheduleScreenState extends State<AlunoScheduleScreen> {
                           (a) => Card(
                             child: ListTile(
                               leading: const Icon(Icons.event_available_outlined),
-                              title: Text(nameFor(a.personalUid)),
-                              subtitle: Text(formatDateTime(a.dateTime)),
+                              title: Text('Personal: ${nameFor(a.personalUid)}'),
+                              subtitle: Text('Data: ${formatDateTime(a.dateTime)}'),
                               trailing: IconButton(
                                 icon: const Icon(Icons.cancel_outlined),
                                 tooltip: 'Cancelar',

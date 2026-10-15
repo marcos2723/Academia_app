@@ -62,15 +62,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const SizedBox(height: 16),
                 if (!sent) ...[
                   Text(
-                    'Informe seu e-mail. Vamos enviar um link para você criar uma senha nova.',
+                    'Informe seu e-mail para receber o link de nova senha.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Pode cair na caixa de spam — vale conferir lá também.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 20),
                   TextField(
@@ -99,8 +93,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                 ] else ...[
                   Text(
-                    'E-mail enviado! Confira sua caixa de entrada — e o spam, caso não apareça em '
-                    'alguns minutos.',
+                    'E-mail enviado! Confira também o spam.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

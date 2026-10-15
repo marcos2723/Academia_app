@@ -8,13 +8,13 @@ import '../models/appointment.dart';
 import '../models/personal.dart';
 import '../models/availability.dart';
 import '../models/notification_record.dart';
+import '../models/checkin.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/account_provisioning_service.dart';
 import '../services/app_exceptions.dart';
 import '../services/notification_service.dart';
 import 'change_password_screen.dart';
-import '../utils/app_colors.dart';
 import 'dashboard_page.dart';
 import 'students_page.dart';
 import 'templates_page.dart';
@@ -47,6 +47,7 @@ class _HomeShellState extends State<HomeShell> {
   List<Student> students = [];
   List<Plan> plans = [];
   List<Evaluation> evaluations = [];
+  List<Checkin> checkins = [];
   List<Appointment> appointments = [];
   List<Personal> personals = [];
   List<PlanTemplate> templates = [];
@@ -57,6 +58,7 @@ class _HomeShellState extends State<HomeShell> {
   StreamSubscription<List<Student>>? _studentsSub;
   StreamSubscription<List<Plan>>? _plansSub;
   StreamSubscription<List<Evaluation>>? _evaluationsSub;
+  StreamSubscription<List<Checkin>>? _checkinsSub;
   StreamSubscription<List<Appointment>>? _appointmentsSub;
   StreamSubscription<List<Personal>>? _personalsSub;
   StreamSubscription<List<NotificationRecord>>? _notificationsSub;
@@ -88,6 +90,10 @@ class _HomeShellState extends State<HomeShell> {
     _evaluationsSub = evaluationsStream.listen(
       (data) => setState(() => evaluations = data),
       onError: (Object error) => setState(() => loadError = 'Erro ao carregar avaliações: $error'),
+    );
+    _checkinsSub = service.watchRecentCheckins().listen(
+      (data) => setState(() => checkins = data),
+      onError: (Object error) => setState(() => loadError = 'Erro ao carregar registros: $error'),
     );
     _appointmentsSub = service.watchAppointments().listen(
       (data) => setState(() => appointments = data),
@@ -121,6 +127,7 @@ class _HomeShellState extends State<HomeShell> {
     _studentsSub?.cancel();
     _plansSub?.cancel();
     _evaluationsSub?.cancel();
+    _checkinsSub?.cancel();
     _appointmentsSub?.cancel();
     _personalsSub?.cancel();
     _notificationsSub?.cancel();
@@ -210,7 +217,9 @@ class _HomeShellState extends State<HomeShell> {
           DashboardPage(
             students: students,
             plans: plans,
+            templates: templates,
             evaluations: evaluations,
+            checkins: checkins,
             appointments: appointments,
             studentName: studentName,
           ),
@@ -342,28 +351,28 @@ class _HomeShellState extends State<HomeShell> {
                         onDestinationSelected: (value) => setState(() => section = value == 4 ? 6 : value),
                         destinations: const [
                           NavigationRailDestination(
-                            icon: Icon(Icons.dashboard_outlined, color: kPainelAccent),
-                            selectedIcon: Icon(Icons.dashboard, color: kPainelAccent),
+                            icon: Icon(Icons.dashboard_outlined),
+                            selectedIcon: Icon(Icons.dashboard),
                             label: Text('Painel'),
                           ),
                           NavigationRailDestination(
-                            icon: Icon(Icons.people_outline, color: kAlunosAccent),
-                            selectedIcon: Icon(Icons.people, color: kAlunosAccent),
+                            icon: Icon(Icons.people_outline),
+                            selectedIcon: Icon(Icons.people),
                             label: Text('Alunos'),
                           ),
                           NavigationRailDestination(
-                            icon: Icon(Icons.fitness_center_outlined, color: kTrainingAccent),
-                            selectedIcon: Icon(Icons.fitness_center, color: kTrainingAccent),
+                            icon: Icon(Icons.fitness_center_outlined),
+                            selectedIcon: Icon(Icons.fitness_center),
                             label: Text('Treinos'),
                           ),
                           NavigationRailDestination(
-                            icon: Icon(Icons.restaurant_menu_outlined, color: kDietAccent),
-                            selectedIcon: Icon(Icons.restaurant_menu, color: kDietAccent),
+                            icon: Icon(Icons.restaurant_menu_outlined),
+                            selectedIcon: Icon(Icons.restaurant_menu),
                             label: Text('Dietas'),
                           ),
                           NavigationRailDestination(
-                            icon: Icon(Icons.person_outline, color: kPerfilAccent),
-                            selectedIcon: Icon(Icons.person, color: kPerfilAccent),
+                            icon: Icon(Icons.person_outline),
+                            selectedIcon: Icon(Icons.person),
                             label: Text('Perfil'),
                           ),
                         ],
@@ -384,11 +393,11 @@ class _HomeShellState extends State<HomeShell> {
                   selectedIndex: section <= 3 ? section : 4,
                   onDestinationSelected: (value) => setState(() => section = value == 4 ? 6 : value),
                   destinations: const [
-                    NavigationDestination(icon: Icon(Icons.dashboard_outlined, color: kPainelAccent), selectedIcon: Icon(Icons.dashboard, color: kPainelAccent), label: 'Painel'),
-                    NavigationDestination(icon: Icon(Icons.people_outline, color: kAlunosAccent), selectedIcon: Icon(Icons.people, color: kAlunosAccent), label: 'Alunos'),
-                    NavigationDestination(icon: Icon(Icons.fitness_center_outlined, color: kTrainingAccent), selectedIcon: Icon(Icons.fitness_center, color: kTrainingAccent), label: 'Treinos'),
-                    NavigationDestination(icon: Icon(Icons.restaurant_menu_outlined, color: kDietAccent), selectedIcon: Icon(Icons.restaurant_menu, color: kDietAccent), label: 'Dietas'),
-                    NavigationDestination(icon: Icon(Icons.person_outline, color: kPerfilAccent), selectedIcon: Icon(Icons.person, color: kPerfilAccent), label: 'Perfil'),
+                    NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Painel'),
+                    NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Alunos'),
+                    NavigationDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: 'Treinos'),
+                    NavigationDestination(icon: Icon(Icons.restaurant_menu_outlined), selectedIcon: Icon(Icons.restaurant_menu), label: 'Dietas'),
+                    NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
                   ],
                 )
               : null,

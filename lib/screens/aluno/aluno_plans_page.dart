@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../../models/plan.dart';
+import '../../models/evaluation.dart';
+import '../../models/checkin.dart';
+import '../../models/prescription.dart';
 import '../../models/student.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
-import '../../utils/app_colors.dart';
+import '../../utils/adherence.dart';
 import '../../utils/diet_pdf.dart';
 import '../../utils/training_pdf.dart';
+import '../../widgets/adherence_view.dart';
+import '../../widgets/plan_result_card.dart';
+import '../../widgets/checkin_dialog.dart';
+import '../../widgets/labeled_value.dart';
+import '../../widgets/prescriptions_section.dart';
+import '../../widgets/training_days_view.dart';
 import '../../widgets/page_shell.dart';
 
 class AlunoPlansPage extends StatefulWidget {
@@ -25,9 +34,52 @@ class AlunoPlansPage extends StatefulWidget {
 
 class _AlunoPlansPageState extends State<AlunoPlansPage> {
   late final Stream<List<Plan>> _plansStream = widget.service.watchPlansForStudent(widget.student.id);
+  late final Stream<List<Checkin>> _checkinsStream = widget.service.watchCheckinsForStudent(widget.student.id);
+  List<Checkin> _checkins = const [];
+  late final Stream<List<Evaluation>> _evaluationsStream =
+      widget.service.watchEvaluationsForStudent(widget.student.id);
+  List<Evaluation> _evaluations = const [];
+  // Atualiza o calendário aberto no diálogo quando chega um registro novo.
+  final ValueNotifier<List<Checkin>> _checkinsNotifier = ValueNotifier(const []);
+
+  @override
+  void dispose() {
+    _checkinsNotifier.dispose();
+    super.dispose();
+  }
+  // Só é criado (lazy) na aba de dietas.
+  late final Stream<List<Prescription>> _prescriptionsStream =
+      widget.service.watchIssuedPrescriptionsForStudent(widget.student.id);
+  List<Prescription> _prescriptions = const [];
+
+  Future<void> _register(Plan p, {DateTime? date}) async {
+    final draft = await showCheckinDialog(context, plan: p, existing: _checkins, date: date);
+    if (draft == null) return;
+    try {
+      await widget.service.saveCheckins([
+        for (final e in draft.entries)
+          Checkin(
+            id: Checkin.docId(p.id, e.date),
+            studentId: widget.student.id,
+            planId: p.id,
+            type: p.type,
+            date: e.date,
+            status: draft.status,
+            dayLabel: e.dayLabel,
+            note: draft.note,
+          ),
+      ]);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não consegui salvar o registro.')),
+        );
+      }
+    }
+  }
 
   bool get _isTraining => widget.fixedType == PlanType.training;
-  Color get _accent => _isTraining ? kTrainingAccent : kDietAccent;
+  Color get _accent => Theme.of(context).colorScheme.primary;
 
   Future<void> _downloadDietPdf(Plan p) async {
     final bytes = await buildDietPdf(
@@ -55,7 +107,7 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
       planTitle: p.title,
       validity: '${formatDate(p.startDate)} a ${formatDate(p.endDate)}',
       objective: widget.student.goal,
-      exercises: p.exercises,
+      days: p.days,
     );
     final safeName = p.title.trim().isEmpty
         ? 'treino'
@@ -86,27 +138,34 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Vigência: ${formatDate(p.startDate)} até ${formatDate(p.endDate)}'
-                    '${p.isActive ? ' (em andamento)' : ''}'),
+                LabeledValue(
+                  label: 'Vigência',
+                  value: '${formatDate(p.startDate)} até ${formatDate(p.endDate)}'
+                      '${p.isActive ? ' (em andamento)' : ''}',
+                ),
                 if (linkedTitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      p.type == PlanType.training ? 'Integrado à dieta: $linkedTitle' : 'Integrado ao treino: $linkedTitle',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                    ),
+                  LabeledValue(
+                    label: p.type == PlanType.training ? 'Integrado à dieta' : 'Integrado ao treino',
+                    value: linkedTitle,
                   ),
                 const Divider(height: 24),
+                ValueListenableBuilder<List<Checkin>>(
+                  valueListenable: _checkinsNotifier,
+                  builder: (_, list, __) => PlanResultCard(plan: p, evaluations: _evaluations, checkins: list),
+                ),
+                const Divider(height: 24),
+                ValueListenableBuilder<List<Checkin>>(
+                  valueListenable: _checkinsNotifier,
+                  builder: (_, list, __) => AdherenceView(
+                    plan: p,
+                    checkins: list,
+                    showCalendar: true,
+                    onRegisterDay: (d) => _register(p, date: d),
+                  ),
+                ),
+                const Divider(height: 24),
                 if (p.type == PlanType.training)
-                  if (p.exercises.isEmpty)
-                    const Text('Nenhum exercício cadastrado.')
-                  else
-                    ...p.exercises.map(
-                      (ex) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('• ${ex.name} — ${ex.sets}x${ex.reps}'),
-                      ),
-                    )
+                  TrainingDaysView(days: p.days)
                 else
                   Text(p.dietContent.isEmpty ? 'Nenhum conteúdo cadastrado.' : p.dietContent),
               ],
@@ -135,28 +194,71 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
   Widget _buildList(List<Plan> myPlans) {
     final filtered = myPlans.where((p) => p.type == widget.fixedType).toList()
       ..sort((a, b) => b.startDate.compareTo(a.startDate));
-    if (filtered.isEmpty) {
-      return Center(
-        child: Text(_isTraining ? 'Nenhuma ficha de treino no momento.' : 'Nenhuma dieta no momento.'),
-      );
+    final extra = _isTraining ? 0 : 1;
+    if (filtered.isEmpty && _isTraining) {
+      return const Center(child: Text('Nenhuma ficha de treino no momento.'));
     }
     return ListView.separated(
-      itemCount: filtered.length,
+      itemCount: filtered.length + extra + (filtered.isEmpty && !_isTraining ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        final p = filtered[i];
-        return Card(
-          child: ListTile(
-            leading: Icon(_isTraining ? Icons.fitness_center : Icons.restaurant, color: _accent),
-            title: Text(p.title),
-            subtitle: Text(_isTraining ? '${p.exercises.length} exercício(s)' : 'Dieta'),
-            trailing: Text(
-              '${formatDate(p.startDate)} - ${formatDate(p.endDate)}',
-              style: p.isActive
-                  ? TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)
-                  : null,
+        if (!_isTraining && filtered.isEmpty && i == 0) {
+          return const Card(child: Padding(padding: EdgeInsets.all(18), child: Text('Nenhuma dieta no momento.')));
+        }
+        final dietsShown = filtered.isEmpty ? 1 : filtered.length;
+        if (!_isTraining && i == dietsShown) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 20, bottom: 12),
+            child: PrescriptionsSection(
+              service: widget.service,
+              student: widget.student,
+              prescriptions: _prescriptions,
+              isPersonal: false,
             ),
-            onTap: () => _showDetails(p, myPlans),
+          );
+        }
+        final p = filtered[i];
+        final todayKey = Checkin.dateKeyOf(DateTime.now());
+        final todays = _checkins.where((c) => c.planId == p.id && c.dateKey == todayKey);
+        return Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(_isTraining ? Icons.fitness_center : Icons.restaurant, color: _accent),
+                title: Text(p.title),
+                subtitle: Text(
+                  '${_isTraining ? 'Treinos: ${p.days.length} · Exercícios: ${p.exerciseCount}' : 'Tipo: Dieta'}'
+                  '\nAdesão: ${adherenceLabel(p, _checkins)}',
+                ),
+                isThreeLine: true,
+                trailing: Text(
+                  'Vigência: ${formatDate(p.startDate)} - ${formatDate(p.endDate)}',
+                  style: p.isActive
+                      ? TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)
+                      : null,
+                ),
+                onTap: () => _showDetails(p, myPlans),
+              ),
+              if (p.isActive)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          todays.isEmpty
+                              ? 'Hoje: sem registro'
+                              : 'Hoje: ${todays.first.status.resultLabel(p.type)}',
+                        ),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: () => _register(p),
+                        child: Text(todays.isEmpty ? 'Registrar' : 'Alterar'),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         );
       },
@@ -170,12 +272,37 @@ class _AlunoPlansPageState extends State<AlunoPlansPage> {
       initialData: const [],
       builder: (context, snapshot) {
         final myPlans = snapshot.data ?? const <Plan>[];
-        return PageShell(
-          title: _isTraining ? 'Treinos' : 'Dietas',
-          subtitle: _isTraining
-              ? 'Fichas de treino montadas pelo seu personal.'
-              : 'Dietas montadas pelo seu personal.',
-          child: _buildList(myPlans),
+        return StreamBuilder<List<Evaluation>>(
+          stream: _evaluationsStream,
+          initialData: const [],
+          builder: (context, evalSnapshot) {
+            _evaluations = evalSnapshot.data ?? const <Evaluation>[];
+            return StreamBuilder<List<Checkin>>(
+          stream: _checkinsStream,
+          initialData: const [],
+          builder: (context, checkinSnapshot) {
+            _checkins = checkinSnapshot.data ?? const <Checkin>[];
+            final latest = _checkins;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _checkinsNotifier.value = latest;
+            });
+            Widget shell() => PageShell(
+                  title: _isTraining ? 'Treinos' : 'Dietas',
+                  subtitle: _isTraining ? 'Suas fichas de treino.' : 'Suas dietas.',
+                  child: _buildList(myPlans),
+                );
+            if (_isTraining) return shell();
+            return StreamBuilder<List<Prescription>>(
+              stream: _prescriptionsStream,
+              initialData: const [],
+              builder: (context, rxSnapshot) {
+                _prescriptions = rxSnapshot.data ?? const <Prescription>[];
+                return shell();
+              },
+            );
+          },
+        );
+          },
         );
       },
     );

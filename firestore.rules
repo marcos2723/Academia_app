@@ -74,6 +74,30 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == personalUid;
     }
 
+    match /checkins/{checkinId} {
+      // Registro de treino/dieta feito pelo aluno: ele grava os próprios,
+      // a personal lê e pode corrigir qualquer um.
+      allow read: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId));
+      allow create: if request.auth != null &&
+        (isPersonal() || isOwnStudent(request.resource.data.studentId));
+      allow update: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId)) &&
+        request.resource.data.studentId == resource.data.studentId;
+      allow delete: if request.auth != null &&
+        (isPersonal() || isOwnStudent(resource.data.studentId));
+    }
+
+    match /prescriptions/{prescriptionId} {
+      // Receitas de manipulados: só as personais criam e alteram. O aluno
+      // lê apenas as próprias receitas já assinadas (rascunho fica oculto).
+      allow read: if request.auth != null &&
+        (isPersonal() ||
+         (resource.data.status != 'draft' && isOwnStudent(resource.data.studentId)));
+      allow create, update: if isPersonal();
+      allow delete: if isPersonal() && resource.data.status == 'draft';
+    }
+
     match /notifications/{notificationId} {
       // Cada um só lê/marca como lida a própria notificação; qualquer
       // autenticado pode CRIAR uma notificação para outra pessoa (é assim

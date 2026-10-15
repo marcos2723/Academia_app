@@ -28,6 +28,11 @@ class NotificationRecord {
   final bool read;
   final String type;
 
+  /// Por quanto tempo a notificação fica guardada depois de "valer". Passado
+  /// esse prazo o Firestore a apaga sozinho (política TTL no campo
+  /// `expireAt`).
+  static const Duration retention = Duration(days: 30);
+
   factory NotificationRecord.fromFirestore(String id, Map<String, dynamic> data) {
     final ts = data['scheduledFor'] as Timestamp?;
     return NotificationRecord(
@@ -49,5 +54,6 @@ class NotificationRecord {
         'read': read,
         'type': type,
         'createdAt': FieldValue.serverTimestamp(),
+        'expireAt': Timestamp.fromDate(scheduledFor.add(retention)),
       };
 }

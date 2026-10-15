@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/personal.dart';
 import '../models/callbacks.dart';
 import '../services/app_exceptions.dart';
+import '../widgets/labeled_value.dart';
 import '../widgets/page_shell.dart';
 
 class PersonalsPage extends StatelessWidget {
@@ -53,14 +54,15 @@ class PersonalsPage extends StatelessWidget {
                     Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ],
                 ] else ...[
-                  Text('Conta criada para ${name.text.trim()}!', style: Theme.of(context).textTheme.titleMedium),
+                  Text('Conta criada com sucesso!', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 10),
-                  Text('E-mail: ${email.text.trim()}'),
-                  Text('Senha temporária: $createdPassword'),
+                  LabeledValue(label: 'Nome', value: name.text.trim()),
+                  LabeledValue(label: 'E-mail', value: email.text.trim()),
+                  LabeledValue(label: 'Telefone', value: phone.text.trim()),
+                  LabeledValue(label: 'Senha temporária', value: createdPassword ?? ''),
                   const SizedBox(height: 10),
                   Text(
-                    'Passe esses dados para a pessoa entrar; ela pode trocar a senha depois em '
-                    '"Esqueci minha senha" na tela de login, ou na aba Perfil já logada.',
+                    'Repasse esses dados para o primeiro acesso.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -143,12 +145,26 @@ class PersonalsPage extends StatelessWidget {
               itemBuilder: (_, i) {
                 final p = personals[i];
                 return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase())),
-                    title: Text(p.name.isEmpty ? p.email : p.name),
-                    subtitle: Text(p.phone.isEmpty ? p.email : '${p.email}\n${p.phone}'),
-                    isThreeLine: p.phone.isNotEmpty,
-                    trailing: p.uid == currentUid ? const Chip(label: Text('Você')) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase())),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              LabeledValue(label: 'Nome', value: p.name),
+                              LabeledValue(label: 'E-mail', value: p.email),
+                              LabeledValue(label: 'Telefone', value: p.phone),
+                            ],
+                          ),
+                        ),
+                        if (p.uid == currentUid) const Chip(label: Text('Você')),
+                      ],
+                    ),
                   ),
                 );
               },

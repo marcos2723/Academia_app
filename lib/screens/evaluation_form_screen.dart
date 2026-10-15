@@ -184,10 +184,6 @@ class _EvaluationFormScreenState extends State<EvaluationFormScreen> {
               _pairRow(_field(calfLeft, 'Panturrilha esquerda'), const SizedBox.shrink()),
               const Divider(height: 8),
               _sectionTitle('Dobras cutâneas (mm) — protocolo Pollock 7 dobras'),
-              Text(
-                'Usadas para calcular o % de gordura automaticamente, considerando sexo e idade do aluno.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
               const SizedBox(height: 12),
               _pairRow(_field(skinfoldChest, 'Peitoral'), _field(skinfoldAbdominal, 'Abdominal')),
               _pairRow(_field(skinfoldThigh, 'Coxa'), _field(skinfoldTriceps, 'Tríceps')),

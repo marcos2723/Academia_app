@@ -58,4 +58,24 @@ class WhatsAppService {
     final uri = buildLink(phone: phone, message: message);
     return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+
+  /// Mensagem de incentivo para quem está registrando pouco ou parou.
+  static Future<bool> encourageRegistration({
+    required String phone,
+    required String studentName,
+    double? percent,
+    int? daysSilent,
+  }) async {
+    final motivo = daysSilent == null
+        ? 'ainda não vi nenhum registro seu no app'
+        : daysSilent >= 7
+            ? 'faz $daysSilent dias que não vejo um registro seu no app'
+            : 'vi que sua adesão recente está em ${percent?.round() ?? 0}%';
+    final message = 'Olá, $studentName! 👋\n\n'
+        'Passando para dizer que $motivo. Está tudo bem? Se precisar ajustar '
+        'seu treino ou sua dieta, é só me avisar. Lembre de registrar no app '
+        'o que você fez — isso me ajuda a acompanhar sua evolução!';
+    final uri = buildLink(phone: phone, message: message);
+    return launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }

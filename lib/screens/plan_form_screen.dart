@@ -4,7 +4,7 @@ import '../models/plan.dart';
 import '../models/plan_template.dart';
 import '../models/callbacks.dart';
 import '../utils/formatters.dart';
-import '../utils/input_formatters.dart';
+import '../widgets/training_days_editor.dart';
 import 'template_form_screen.dart';
 
 const List<String> planObjectives = [
@@ -17,17 +17,6 @@ const List<String> planObjectives = [
 ];
 
 const List<String> planLevels = ['Iniciante', 'Intermediário', 'Avançado'];
-
-class _ExerciseRow {
-  _ExerciseRow({String name = '', int sets = 3, int reps = 12})
-      : nameController = TextEditingController(text: name),
-        setsController = TextEditingController(text: sets.toString()),
-        repsController = TextEditingController(text: reps.toString());
-
-  final TextEditingController nameController;
-  final TextEditingController setsController;
-  final TextEditingController repsController;
-}
 
 /// Tela cheia para ATRIBUIR um plano a um aluno a partir de um modelo da
 /// biblioteca — os planos agora nascem sempre de um template fixo; aqui
@@ -43,6 +32,8 @@ class PlanFormScreen extends StatefulWidget {
     this.initialStudentId,
     this.existingPlans = const [],
     this.fixedType,
+    this.existing,
+    this.onUpdatePlan,
   });
 
   final List<Student> students;
@@ -61,16 +52,21 @@ class PlanFormScreen extends StatefulWidget {
   /// escolheu ao abrir a aba certa.
   final PlanType? fixedType;
 
+  /// Ficha já atribuída a editar (null para atribuir uma nova).
+  final Plan? existing;
+  final UpdatePlanCallback? onUpdatePlan;
+
   @override
   State<PlanFormScreen> createState() => _PlanFormScreenState();
 }
 
 class _PlanFormScreenState extends State<PlanFormScreen> {
   String? studentId;
-  late PlanType type = widget.fixedType ?? PlanType.training;
+  late PlanType type = widget.existing?.type ?? widget.fixedType ?? PlanType.training;
+  bool get _editing => widget.existing != null;
   final title = TextEditingController();
   final dietContent = TextEditingController();
-  final List<_ExerciseRow> exercises = [];
+  final TrainingDaysController daysController = TrainingDaysController();
   DateTime startDate = DateTime.now();
   DateTime endDate = DateTime.now().add(const Duration(days: 30));
   String? linkedPlanId;
@@ -83,15 +79,27 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
   void initState() {
     super.initState();
     studentId = widget.initialStudentId ?? (widget.students.isEmpty ? null : widget.students.first.id);
+    final e = widget.existing;
+    if (e != null) {
+      studentId = e.studentId;
+      title.text = e.title;
+      startDate = e.startDate;
+      endDate = e.endDate;
+      linkedPlanId = e.linkedPlanId;
+      loadedTemplateId = e.templateId;
+      if (e.type == PlanType.training) {
+        daysController.load(e.days);
+      } else {
+        dietContent.text = e.dietContent;
+      }
+    }
   }
-
-  void _addExerciseRow() => setState(() => exercises.add(_ExerciseRow()));
-
-  void _removeExerciseRow(int index) => setState(() => exercises.removeAt(index));
 
   List<Plan> get _linkableOptions {
     final opposite = type == PlanType.training ? PlanType.diet : PlanType.training;
-    return widget.existingPlans.where((p) => p.type == opposite && p.studentId == studentId).toList();
+    return widget.existingPlans
+        .where((p) => p.type == opposite && p.studentId == studentId && p.id != widget.existing?.id)
+        .toList();
   }
 
   void _applyTemplate(PlanTemplate template) {
@@ -99,13 +107,7 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
       loadedTemplateId = template.id;
       title.text = template.title;
       if (template.type == PlanType.training) {
-        exercises
-          ..clear()
-          ..addAll(
-            template.exercises.isEmpty
-                ? [_ExerciseRow()]
-                : template.exercises.map((e) => _ExerciseRow(name: e.name, sets: e.sets, reps: e.reps)),
-          );
+        daysController.load(template.days);
       } else {
         dietContent.text = template.dietContent;
       }
@@ -124,7 +126,7 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
       setState(() => errorText = 'Selecione um aluno.');
       return;
     }
-    if (loadedTemplateId == null) {
+    if (!_editing && loadedTemplateId == null) {
       setState(() => errorText = 'Escolha um modelo para partir dele.');
       return;
     }
@@ -136,18 +138,16 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
       setState(() => errorText = 'A data de término não pode ser antes do início.');
       return;
     }
-    List<Exercise> exerciseList = const [];
+    List<TrainingDay> dayList = const [];
     String diet = '';
     if (type == PlanType.training) {
-      exerciseList = exercises
-          .where((row) => row.nameController.text.trim().isNotEmpty)
-          .map((row) => Exercise(
-                name: row.nameController.text.trim(),
-                sets: int.tryParse(row.setsController.text.trim()) ?? 0,
-                reps: int.tryParse(row.repsController.text.trim()) ?? 0,
-              ))
-          .toList();
-      if (exerciseList.isEmpty) {
+      final conflict = daysController.weekdayConflict();
+      if (conflict != null) {
+        setState(() => errorText = conflict);
+        return;
+      }
+      dayList = daysController.build();
+      if (dayList.isEmpty) {
         setState(() => errorText = 'Adicione ao menos um exercício.');
         return;
       }
@@ -164,6 +164,29 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
       errorText = null;
     });
 
+    if (_editing) {
+      try {
+        await widget.onUpdatePlan!(
+          id: widget.existing!.id,
+          title: title.text.trim(),
+          startDate: startDate,
+          endDate: endDate,
+          days: dayList,
+          dietContent: diet,
+          linkedPlanId: linkedPlanId,
+        );
+        if (mounted) Navigator.pop(context);
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            saving = false;
+            errorText = 'Não consegui salvar as alterações.';
+          });
+        }
+      }
+      return;
+    }
+
     final student = widget.students.firstWhere((s) => s.id == studentId);
     await widget.onAddPlan(
       studentId: studentId!,
@@ -171,7 +194,7 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
       title: title.text.trim(),
       startDate: startDate,
       endDate: endDate,
-      exercises: exerciseList,
+      days: dayList,
       dietContent: diet,
       linkedPlanId: linkedPlanId,
       templateId: loadedTemplateId,
@@ -184,8 +207,10 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: isStart ? startDate : endDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 730)),
+      firstDate: [DateTime.now().subtract(const Duration(days: 365)), startDate, endDate]
+          .reduce((a, b) => a.isBefore(b) ? a : b),
+      lastDate: [DateTime.now().add(const Duration(days: 730)), startDate, endDate]
+          .reduce((a, b) => a.isAfter(b) ? a : b),
     );
     if (picked == null) return;
     setState(() {
@@ -203,7 +228,11 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
     final options = widget.templates.where((t) => t.type == type).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Text(type == PlanType.training ? 'Nova ficha de treino' : 'Nova dieta'),
+        title: Text(
+          _editing
+              ? (type == PlanType.training ? 'Editar ficha de treino' : 'Editar dieta')
+              : (type == PlanType.training ? 'Nova ficha de treino' : 'Nova dieta'),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -221,7 +250,7 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
                           linkedPlanId = null;
                         }),
               ),
-              if (widget.fixedType == null) ...[
+              if (widget.fixedType == null && !_editing) ...[
                 const SizedBox(height: 14),
                 SegmentedButton<PlanType>(
                   segments: const [
@@ -235,21 +264,13 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
                     loadedTemplateId = null;
                     title.clear();
                     dietContent.clear();
-                    exercises.clear();
+                    daysController.clear();
                   }),
                 ),
               ],
+              if (!_editing) ...[
               const SizedBox(height: 18),
               Text('Modelo base', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(
-                type == PlanType.training
-                    ? 'Toda ficha de treino parte de um modelo da biblioteca — escolha um e ajuste o '
-                        'que for particular deste aluno.'
-                    : 'Toda dieta parte de um modelo da biblioteca — escolha um e ajuste o que for '
-                        'particular deste aluno.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
               const SizedBox(height: 10),
               if (options.isEmpty)
                 Card(
@@ -289,7 +310,8 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
                     if (match.isNotEmpty) _applyTemplate(match.first);
                   },
                 ),
-              if (loadedTemplateId != null) ...[
+              ],
+              if (_editing || loadedTemplateId != null) ...[
                 const SizedBox(height: 18),
                 TextField(
                   controller: title,
@@ -343,60 +365,12 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
                 ],
                 const SizedBox(height: 18),
                 Text(
-                  'Ajuste as particularidades deste aluno',
+                  type == PlanType.training ? 'Treinos' : 'Dieta',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 if (type == PlanType.training) ...[
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _addExerciseRow,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Adicionar exercício'),
-                    ),
-                  ),
-                  for (var i = 0; i < exercises.length; i++)
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: exercises[i].nameController,
-                                decoration: const InputDecoration(labelText: 'Exercício', isDense: true),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                controller: exercises[i].setsController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: integerInputFormatters,
-                                decoration: const InputDecoration(labelText: 'Séries', isDense: true),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                controller: exercises[i].repsController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: integerInputFormatters,
-                                decoration: const InputDecoration(labelText: 'Repetições', isDense: true),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: exercises.length > 1 ? () => _removeExerciseRow(i) : null,
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  TrainingDaysEditor(controller: daysController),
                 ] else ...[
                   TextField(
                     controller: dietContent,
@@ -417,7 +391,7 @@ class _PlanFormScreenState extends State<PlanFormScreen> {
                 onPressed: saving ? null : _save,
                 child: saving
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Atribuir ao aluno'),
+                    : Text(_editing ? 'Salvar alterações' : 'Atribuir ao aluno'),
               ),
               const SizedBox(height: 24),
             ],

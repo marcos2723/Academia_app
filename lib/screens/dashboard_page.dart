@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/student.dart';
 import '../models/plan.dart';
+import '../models/plan_template.dart';
 import '../models/evaluation.dart';
 import '../models/appointment.dart';
+import '../models/checkin.dart';
+import '../utils/adherence_alert.dart';
 import '../services/whatsapp_service.dart';
 import '../utils/formatters.dart';
-import '../utils/app_colors.dart';
 import '../widgets/page_shell.dart';
 import '../widgets/metric_card.dart';
 
@@ -14,14 +16,18 @@ class DashboardPage extends StatelessWidget {
     super.key,
     required this.students,
     required this.plans,
+    required this.templates,
     required this.evaluations,
+    required this.checkins,
     required this.appointments,
     required this.studentName,
   });
 
   final List<Student> students;
   final List<Plan> plans;
+  final List<PlanTemplate> templates;
   final List<Evaluation> evaluations;
+  final List<Checkin> checkins;
   final List<Appointment> appointments;
   final String Function(String id) studentName;
 
@@ -34,6 +40,20 @@ class DashboardPage extends StatelessWidget {
     if (context.mounted && !opened) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Não consegui abrir o WhatsApp para ${student.name}. Confira o telefone cadastrado.')),
+      );
+    }
+  }
+
+  Future<void> _encourage(BuildContext context, AdherenceAlert a) async {
+    final opened = await WhatsAppService.encourageRegistration(
+      phone: a.student.phone,
+      studentName: a.student.name,
+      percent: a.percent,
+      daysSilent: a.daysSilent,
+    );
+    if (context.mounted && !opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não consegui abrir o WhatsApp para ${a.student.name}. Confira o telefone cadastrado.')),
       );
     }
   }
@@ -75,37 +95,37 @@ class DashboardPage extends StatelessWidget {
       });
     final staleTop5 = staleStudents.take(5).toList();
 
+    final adherenceAlerts = computeAdherenceAlerts(students: students, plans: plans, checkins: checkins);
+    final alertsTop5 = adherenceAlerts.take(5).toList();
+
     final nextAppointments = appointments.where((a) => !a.dateTime.isBefore(now)).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     final next3 = nextAppointments.take(3).toList();
 
     return PageShell(
       title: 'Visão geral',
-      subtitle: 'Acompanhamento físico e nutricional dos alunos.',
+      subtitle: 'Visão geral dos alunos.',
       child: ListView(
         children: [
           Wrap(
             spacing: 16,
             runSpacing: 16,
             children: [
-              MetricCard(label: 'Alunos ativos', value: '${students.where((s) => s.active).length}', icon: Icons.people, color: kAlunosAccent),
+              MetricCard(label: 'Alunos ativos', value: '${students.where((s) => s.active).length}', icon: Icons.people),
               MetricCard(
                 label: 'Avaliações neste mês',
                 value: '$evaluationsThisMonth',
                 icon: Icons.assignment_turned_in,
-                color: kAvaliacoesAccent,
               ),
               MetricCard(
-                label: 'Treinos vigentes',
-                value: '${plans.where((p) => p.type == PlanType.training && p.isActive).length}',
+                label: 'Treinos disponíveis',
+                value: '${templates.where((t) => t.type == PlanType.training).length}',
                 icon: Icons.fitness_center,
-                color: kTrainingAccent,
               ),
               MetricCard(
-                label: 'Dietas vigentes',
-                value: '${plans.where((p) => p.type == PlanType.diet && p.isActive).length}',
+                label: 'Dietas disponíveis',
+                value: '${templates.where((t) => t.type == PlanType.diet).length}',
                 icon: Icons.restaurant_menu,
-                color: kDietAccent,
               ),
             ],
           ),
@@ -119,7 +139,7 @@ class DashboardPage extends StatelessWidget {
                 children: [
                   _ComparisonRow(
                     icon: Icons.assignment_turned_in,
-                    color: kAvaliacoesAccent,
+                    color: Theme.of(context).colorScheme.primary,
                     label: 'Avaliações realizadas',
                     current: evaluationsThisMonth,
                     previous: evaluationsLastMonth,
@@ -127,7 +147,7 @@ class DashboardPage extends StatelessWidget {
                   const Divider(height: 1),
                   _ComparisonRow(
                     icon: Icons.person_add_alt,
-                    color: kAlunosAccent,
+                    color: Theme.of(context).colorScheme.primary,
                     label: 'Novos alunos',
                     current: newStudentsThisMonth,
                     previous: newStudentsLastMonth,
@@ -136,6 +156,40 @@ class DashboardPage extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          Text('Alunos com baixa adesão', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 10),
+          if (alertsTop5.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Todos estão registrando em dia. 👍'),
+              ),
+            )
+          else
+            ...alertsTop5.map(
+              (a) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.trending_down, color: Color(0xFFEF4444)),
+                  title: Text('Aluno: ${a.student.name}'),
+                  subtitle: Text([
+                    a.daysSilent == null ? 'Nunca registrou' : (a.daysSilent! >= kSilentDaysThreshold ? 'Sem registro há ${a.daysSilent} dias' : null),
+                    if (a.percent != null) 'Adesão: ${a.percent!.round()}% (${kAlertWindowDays} dias)',
+                  ].whereType<String>().join(' · ')),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.chat_outlined),
+                    tooltip: 'Chamar no WhatsApp',
+                    onPressed: () => _encourage(context, a),
+                  ),
+                ),
+              ),
+            ),
+          if (adherenceAlerts.length > alertsTop5.length)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text('+ ${adherenceAlerts.length - alertsTop5.length} outros alunos',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
           const SizedBox(height: 24),
           Text('Alunos sem avaliação recente', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
@@ -150,10 +204,10 @@ class DashboardPage extends StatelessWidget {
             ...staleTop5.map(
               (entry) => Card(
                 child: ListTile(
-                  leading: const Icon(Icons.warning_amber_outlined, color: Colors.amber),
-                  title: Text(entry.student.name),
+                  leading: const Icon(Icons.warning_amber_outlined, color: Color(0xFFF59E0B)),
+                  title: Text('Aluno: ${entry.student.name}'),
                   subtitle: Text(
-                    entry.daysSince == null ? 'Nunca avaliado' : 'Última avaliação há ${entry.daysSince} dias',
+                    entry.daysSince == null ? 'Última avaliação: nunca avaliado' : 'Última avaliação: há ${entry.daysSince} dias',
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.chat_outlined),
@@ -178,8 +232,8 @@ class DashboardPage extends StatelessWidget {
               (a) => Card(
                 child: ListTile(
                   leading: const Icon(Icons.event_outlined),
-                  title: Text(studentName(a.studentId)),
-                  subtitle: Text(formatDateTime(a.dateTime)),
+                  title: Text('Aluno: ${studentName(a.studentId)}'),
+                  subtitle: Text('Data: ${formatDateTime(a.dateTime)}'),
                 ),
               ),
             ),
@@ -215,11 +269,11 @@ class _ComparisonRow extends StatelessWidget {
     final String trendText;
     if (diff > 0) {
       trendIcon = Icons.trending_up;
-      trendColor = Colors.greenAccent;
+      trendColor = Theme.of(context).brightness == Brightness.dark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
       trendText = '+$diff';
     } else if (diff < 0) {
       trendIcon = Icons.trending_down;
-      trendColor = Colors.redAccent;
+      trendColor = Theme.of(context).brightness == Brightness.dark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
       trendText = '$diff';
     } else {
       trendIcon = Icons.trending_flat;

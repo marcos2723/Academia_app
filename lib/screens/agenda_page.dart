@@ -207,9 +207,8 @@ class _AgendaPageState extends State<AgendaPage> {
         builder: (context) => AlertDialog(
           title: const Text('Muito perto do horário'),
           content: const Text(
-            'Faltam menos de 3 horas para essa avaliação. Cancelamentos precisam ser feitos com '
-            'pelo menos 3 horas de antecedência — combine diretamente com o aluno se for realmente '
-            'necessário desmarcar agora.',
+            'Faltam menos de 3 horas. Cancelamentos exigem 3 horas de antecedência — '
+            'combine direto com o aluno.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi')),
@@ -253,8 +252,10 @@ class _AgendaPageState extends State<AgendaPage> {
     Widget tile(Appointment a) => Card(
           child: ListTile(
             leading: const Icon(Icons.event_outlined),
-            title: Text(widget.studentName(a.studentId)),
-            subtitle: Text(a.notes.isEmpty ? formatDateTime(a.dateTime) : '${formatDateTime(a.dateTime)} · ${a.notes}'),
+            title: Text('Aluno: ${widget.studentName(a.studentId)}'),
+            subtitle: Text(a.notes.isEmpty
+                ? 'Data: ${formatDateTime(a.dateTime)}'
+                : 'Data: ${formatDateTime(a.dateTime)} · Observações: ${a.notes}'),
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline),
               onPressed: () => _confirmDelete(a),
@@ -264,7 +265,7 @@ class _AgendaPageState extends State<AgendaPage> {
 
     return PageShell(
       title: 'Agenda',
-      subtitle: 'Marque os horários das próximas avaliações.',
+      subtitle: 'Próximas avaliações.',
       action: FilledButton.icon(
         onPressed: widget.students.isEmpty ? null : _openNewAppointment,
         icon: const Icon(Icons.add),

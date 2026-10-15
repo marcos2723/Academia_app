@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/personal.dart';
 import '../models/availability.dart';
 import '../models/callbacks.dart';
-import '../utils/app_colors.dart';
+import '../widgets/labeled_value.dart';
 import '../widgets/page_shell.dart';
-import 'availability_form_screen.dart';
+import '../widgets/theme_mode_selector.dart';
 import 'edit_personal_profile_screen.dart';
 
 class PersonalProfilePage extends StatelessWidget {
@@ -30,18 +30,7 @@ class PersonalProfilePage extends StatelessWidget {
   final VoidCallback? onOpenAgenda;
   final VoidCallback? onOpenEquipe;
 
-  Future<void> _openMyAvailability(BuildContext context) async {
-    final current = await myAvailabilityStream.first;
-    if (!context.mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AvailabilityFormScreen(initialRanges: current.ranges, onSave: onSaveAvailability),
-      ),
-    );
-  }
-
-  Future<void> _openEditProfile(BuildContext context) async {
+  Future<void> _openEditProfile(BuildContext context, List<AvailabilityRange> ranges) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -49,6 +38,8 @@ class PersonalProfilePage extends StatelessWidget {
           initialName: myProfile?.name ?? '',
           initialPhone: myProfile?.phone ?? '',
           onSave: onSaveProfile,
+          initialRanges: ranges,
+          onSaveAvailability: onSaveAvailability,
         ),
       ),
     );
@@ -57,35 +48,59 @@ class PersonalProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final me = myProfile;
-    return PageShell(
+    return StreamBuilder<PersonalAvailability>(
+      stream: myAvailabilityStream,
+      builder: (context, snapshot) {
+        final ranges = snapshot.data?.ranges ?? const <AvailabilityRange>[];
+        return PageShell(
       title: 'Meu perfil',
-      subtitle: 'Seus dados e horários de atendimento.',
+      subtitle: 'Seus dados e horários.',
       child: ListView(
         children: [
           Card(
-            child: ListTile(
-              leading: CircleAvatar(child: Text(me?.name.isNotEmpty == true ? me!.name[0].toUpperCase() : '?')),
-              title: Text(me?.name.isNotEmpty == true ? me!.name : 'Sem nome cadastrado'),
-              subtitle: Text([
-                if (me?.email.isNotEmpty == true) me!.email,
-                if (me?.phone.isNotEmpty == true) me!.phone,
-              ].join('\n')),
-              isThreeLine: (me?.phone.isNotEmpty ?? false) && (me?.email.isNotEmpty ?? false),
-              trailing: TextButton.icon(
-                onPressed: () => _openEditProfile(context),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Editar'),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(child: Text(me?.name.isNotEmpty == true ? me!.name[0].toUpperCase() : '?')),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Dados pessoais', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 10),
+                        LabeledValue(label: 'Nome', value: me?.name ?? ''),
+                        LabeledValue(label: 'E-mail', value: me?.email ?? ''),
+                        LabeledValue(label: 'Telefone', value: me?.phone ?? ''),
+                        const SizedBox(height: 14),
+                        const ThemeModeSelector(),
+                        const SizedBox(height: 14),
+                        Text('Horários de atendimento', style: Theme.of(context).textTheme.titleSmall),
+                        const SizedBox(height: 6),
+                        if (ranges.isEmpty)
+                          const LabeledValue(label: 'Horários', value: '')
+                        else
+                          for (var wd = 1; wd <= 7; wd++)
+                            if (ranges.any((r) => r.weekday == wd))
+                              LabeledValue(
+                                label: weekdayNames[wd],
+                                value: (ranges.where((r) => r.weekday == wd).toList()
+                                      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes)))
+                                    .map((r) => '${r.startLabel} - ${r.endLabel}')
+                                    .join(' · '),
+                              ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openEditProfile(context, ranges),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Editar'),
+                  ),
+                ],
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.schedule)),
-              title: const Text('Meus horários de atendimento'),
-              subtitle: const Text('Defina quando você aceita marcar avaliações'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openMyAvailability(context),
             ),
           ),
           if (onOpenAgenda != null || onOpenEquipe != null) ...[
@@ -95,9 +110,9 @@ class PersonalProfilePage extends StatelessWidget {
             if (onOpenAgenda != null)
               Card(
                 child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0x33FFC15C),
-                    foregroundColor: kAgendaAccent,
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    foregroundColor: Theme.of(context).colorScheme.primary,
                     child: Icon(Icons.calendar_month_outlined),
                   ),
                   title: const Text('Agenda'),
@@ -110,9 +125,9 @@ class PersonalProfilePage extends StatelessWidget {
               const SizedBox(height: 8),
               Card(
                 child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0x33FF7FA8),
-                    foregroundColor: kEquipeAccent,
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    foregroundColor: Theme.of(context).colorScheme.primary,
                     child: Icon(Icons.groups_outlined),
                   ),
                   title: const Text('Equipe'),
@@ -125,6 +140,8 @@ class PersonalProfilePage extends StatelessWidget {
           ],
         ],
       ),
+    );
+      },
     );
   }
 }

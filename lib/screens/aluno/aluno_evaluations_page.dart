@@ -6,6 +6,7 @@ import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
 import '../../utils/evaluation_metrics.dart';
 import '../../utils/evolution_pdf.dart';
+import '../../widgets/labeled_value.dart';
 import '../../widgets/page_shell.dart';
 import '../../widgets/weight_chart.dart';
 
@@ -50,18 +51,22 @@ class _AlunoEvaluationsPageState extends State<AlunoEvaluationsPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('IMC: ${e.bmi.toStringAsFixed(1)} · % Gordura: ${e.bodyFat.toStringAsFixed(1)}% · '
-                    '% Magra: ${e.leanMassPercent.toStringAsFixed(1)}%'),
+                LabeledValue(label: 'Peso', value: '${e.weight.toStringAsFixed(1)} kg'),
+                LabeledValue(label: 'IMC', value: e.bmi.toStringAsFixed(1)),
+                LabeledValue(label: '% Gordura', value: '${e.bodyFat.toStringAsFixed(1)}%'),
+                LabeledValue(label: '% Massa magra', value: '${e.leanMassPercent.toStringAsFixed(1)}%'),
                 const Divider(height: 24),
                 Text('Circunferências (cm)', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 6),
-                Text('Pescoço: ${e.neck.toStringAsFixed(1)} · Ombros: ${e.shoulders.toStringAsFixed(1)}'),
-                Text('Tórax: ${e.chest.toStringAsFixed(1)} · Cintura: ${e.waist.toStringAsFixed(1)}'),
-                Text('Quadril: ${e.hip.toStringAsFixed(1)}'),
-                Text('Bíceps D/E: ${e.armRight.toStringAsFixed(1)} / ${e.armLeft.toStringAsFixed(1)}'),
-                Text('Antebraço D/E: ${e.forearmRight.toStringAsFixed(1)} / ${e.forearmLeft.toStringAsFixed(1)}'),
-                Text('Coxa D/E: ${e.thighRight.toStringAsFixed(1)} / ${e.thighLeft.toStringAsFixed(1)}'),
-                Text('Panturrilha D/E: ${e.calfRight.toStringAsFixed(1)} / ${e.calfLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Pescoço', value: e.neck.toStringAsFixed(1)),
+                LabeledValue(label: 'Ombros', value: e.shoulders.toStringAsFixed(1)),
+                LabeledValue(label: 'Tórax', value: e.chest.toStringAsFixed(1)),
+                LabeledValue(label: 'Cintura', value: e.waist.toStringAsFixed(1)),
+                LabeledValue(label: 'Quadril', value: e.hip.toStringAsFixed(1)),
+                LabeledValue(label: 'Bíceps (D/E)', value: '${e.armRight.toStringAsFixed(1)} / ${e.armLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Antebraço (D/E)', value: '${e.forearmRight.toStringAsFixed(1)} / ${e.forearmLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Coxa (D/E)', value: '${e.thighRight.toStringAsFixed(1)} / ${e.thighLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Panturrilha (D/E)', value: '${e.calfRight.toStringAsFixed(1)} / ${e.calfLeft.toStringAsFixed(1)}'),
               ],
             ),
           ),
@@ -85,7 +90,7 @@ class _AlunoEvaluationsPageState extends State<AlunoEvaluationsPage> {
 
         return PageShell(
           title: 'Minhas avaliações',
-          subtitle: 'Acompanhe sua evolução física ao longo do tempo.',
+          subtitle: 'Sua evolução física.',
           child: records.isEmpty
               ? const Center(child: Text('Você ainda não tem avaliações registradas.'))
               : ListView(
@@ -159,10 +164,10 @@ class _AlunoEvaluationsPageState extends State<AlunoEvaluationsPage> {
                     ...records.reversed.map(
                       (e) => Card(
                         child: ListTile(
-                          title: Text(formatDate(e.date)),
+                          title: Text('Data: ${formatDate(e.date)}'),
                           subtitle: Text(
-                            '${e.weight.toStringAsFixed(1)} kg · IMC ${e.bmi.toStringAsFixed(1)} · '
-                            '${e.bodyFat.toStringAsFixed(1)}% gordura',
+                            'Peso: ${e.weight.toStringAsFixed(1)} kg · IMC: ${e.bmi.toStringAsFixed(1)} · '
+                            '% Gordura: ${e.bodyFat.toStringAsFixed(1)}%',
                           ),
                           trailing: TextButton(onPressed: () => _showDetails(e), child: const Text('Detalhes')),
                         ),
@@ -193,8 +198,15 @@ class _Chip extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text.rich(
+              TextSpan(
+                style: Theme.of(context).textTheme.titleSmall,
+                children: [
+                  TextSpan(text: '$label: '),
+                  TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
           ],
         ),
       );

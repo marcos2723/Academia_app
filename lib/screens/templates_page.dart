@@ -4,8 +4,8 @@ import '../models/plan_template.dart';
 import '../models/student.dart';
 import '../models/callbacks.dart';
 import '../services/firestore_service.dart';
-import '../utils/app_colors.dart';
 import '../widgets/page_shell.dart';
+import '../widgets/training_days_view.dart';
 import 'template_form_screen.dart';
 import 'student_detail_screen.dart';
 import 'evaluation_form_screen.dart';
@@ -50,7 +50,7 @@ class _TemplatesPageState extends State<TemplatesPage> {
   String studentQuery = '';
 
   bool get _isTraining => widget.fixedType == PlanType.training;
-  Color get _accent => _isTraining ? kTrainingAccent : kDietAccent;
+  Color get _accent => Theme.of(context).colorScheme.primary;
 
   Future<void> _openNewTemplate(BuildContext context) async {
     await Navigator.push(
@@ -78,6 +78,19 @@ class _TemplatesPageState extends State<TemplatesPage> {
     );
   }
 
+  Future<void> _openEditTemplate(PlanTemplate t) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TemplateFormScreen(
+          onSaveTemplate: widget.onSaveTemplate,
+          fixedType: widget.fixedType,
+          existing: t,
+        ),
+      ),
+    );
+  }
+
   void _showDetails(PlanTemplate t) {
     showDialog<void>(
       context: context,
@@ -93,15 +106,7 @@ class _TemplatesPageState extends State<TemplatesPage> {
                 Text('${t.objectiveBase} · ${t.level}'),
                 const Divider(height: 24),
                 if (t.type == PlanType.training)
-                  if (t.exercises.isEmpty)
-                    const Text('Nenhum exercício cadastrado.')
-                  else
-                    ...t.exercises.map(
-                      (ex) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('• ${ex.name} — ${ex.sets}x${ex.reps}'),
-                      ),
-                    )
+                  TrainingDaysView(days: t.days)
                 else
                   Text(t.dietContent.isEmpty ? 'Nenhum conteúdo cadastrado.' : t.dietContent),
               ],
@@ -109,13 +114,21 @@ class _TemplatesPageState extends State<TemplatesPage> {
           ),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _openEditTemplate(t);
+            },
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
+          ),
           TextButton(
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Excluir modelo?'),
-                  content: Text('"${t.title}" vai sair da biblioteca. Planos já atribuídos a alunos não são afetados.'),
+                  content: Text('"${t.title}" sai da biblioteca. Planos já atribuídos não são afetados.'),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
                     FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Excluir')),
@@ -147,8 +160,8 @@ class _TemplatesPageState extends State<TemplatesPage> {
     return PageShell(
       title: _isTraining ? 'Treinos' : 'Dietas',
       subtitle: _isTraining
-          ? 'Modelos de treino reutilizáveis e acesso rápido à ficha de um aluno.'
-          : 'Modelos de dieta reutilizáveis e acesso rápido à ficha de um aluno.',
+          ? 'Modelos de treino.'
+          : 'Modelos de dieta.',
       action: FilledButton.icon(
         onPressed: () => _openNewTemplate(context),
         icon: const Icon(Icons.add),
@@ -210,7 +223,7 @@ class _TemplatesPageState extends State<TemplatesPage> {
                           title: Text(t.title),
                           subtitle: Text(
                             '${t.objectiveBase} · ${t.level}'
-                            '${_isTraining ? ' · ${t.exercises.length} exercício(s)' : ''}',
+                            '${_isTraining ? ' · Treinos: ${t.days.length} · Exercícios: ${t.exerciseCount}' : ''}',
                           ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => _showDetails(t),

@@ -106,10 +106,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: FilledButton.icon(
                     onPressed: loading ? null : _submit,
                     icon: loading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                           )
                         : const Icon(Icons.login),
                     label: const Text('Entrar'),

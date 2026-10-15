@@ -3,6 +3,8 @@ import 'package:printing/printing.dart';
 import '../models/student.dart';
 import '../models/evaluation.dart';
 import '../models/plan.dart';
+import '../models/checkin.dart';
+import '../models/prescription.dart';
 import '../models/plan_template.dart';
 import '../models/callbacks.dart';
 import '../services/firestore_service.dart';
@@ -10,10 +12,15 @@ import '../utils/formatters.dart';
 import '../utils/student_goals.dart';
 import '../utils/input_formatters.dart';
 import '../utils/evaluation_metrics.dart';
-import '../utils/app_colors.dart';
+import '../utils/adherence.dart';
 import '../utils/diet_pdf.dart';
 import '../utils/training_pdf.dart';
 import '../utils/evolution_pdf.dart';
+import '../widgets/adherence_view.dart';
+import '../widgets/plan_result_card.dart';
+import '../widgets/labeled_value.dart';
+import '../widgets/prescriptions_section.dart';
+import '../widgets/training_days_view.dart';
 import '../widgets/weight_chart.dart';
 import 'evaluation_form_screen.dart';
 import 'plan_form_screen.dart';
@@ -65,6 +72,12 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   late final Stream<List<Evaluation>> _evaluationsStream =
       widget.service.watchEvaluationsForStudent(widget.student.id);
   late final Stream<List<Plan>> _plansStream = widget.service.watchPlansForStudent(widget.student.id);
+  late final Stream<List<Checkin>> _checkinsStream = widget.service.watchCheckinsForStudent(widget.student.id);
+  List<Checkin> _checkins = const [];
+  List<Evaluation> _evaluations = const [];
+  late final Stream<List<Prescription>> _prescriptionsStream =
+      widget.service.watchPrescriptionsForStudent(widget.student.id);
+  List<Prescription> _prescriptions = const [];
 
   bool saving = false;
   String? errorText;
@@ -135,6 +148,25 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     );
   }
 
+  Future<void> _openEditPlan(Plan plan, List<Plan> existingPlans) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlanFormScreen(
+          students: [widget.student],
+          onAddPlan: widget.onAddPlan,
+          onUpdatePlan: widget.service.updatePlan,
+          existing: plan,
+          initialStudentId: widget.student.id,
+          existingPlans: existingPlans,
+          templates: widget.templates,
+          onSaveTemplate: widget.onSaveTemplate,
+          fixedType: plan.type,
+        ),
+      ),
+    );
+  }
+
   Future<void> _downloadEvolutionPdf(List<Evaluation> records) async {
     if (records.isEmpty) return;
     final bytes = await buildEvolutionSummaryPdf(
@@ -177,7 +209,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
       planTitle: p.title,
       validity: '${formatDate(p.startDate)} a ${formatDate(p.endDate)}',
       objective: widget.student.goal,
-      exercises: p.exercises,
+      days: p.days,
     );
     final safeName = p.title.trim().isEmpty
         ? 'treino'
@@ -208,29 +240,23 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Vigência: ${formatDate(p.startDate)} até ${formatDate(p.endDate)}'
-                    '${p.isActive ? ' (em andamento)' : ''}'),
+                LabeledValue(
+                  label: 'Vigência',
+                  value: '${formatDate(p.startDate)} até ${formatDate(p.endDate)}'
+                      '${p.isActive ? ' (em andamento)' : ''}',
+                ),
                 if (linkedTitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      p.type == PlanType.training
-                          ? 'Integrado à dieta: $linkedTitle'
-                          : 'Integrado à ficha de treino: $linkedTitle',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                    ),
+                  LabeledValue(
+                    label: p.type == PlanType.training ? 'Integrado à dieta' : 'Integrado à ficha de treino',
+                    value: linkedTitle,
                   ),
                 const Divider(height: 24),
+                PlanResultCard(plan: p, evaluations: _evaluations, checkins: _checkins),
+                const Divider(height: 24),
+                AdherenceView(plan: p, checkins: _checkins, showCalendar: true),
+                const Divider(height: 24),
                 if (p.type == PlanType.training)
-                  if (p.exercises.isEmpty)
-                    const Text('Nenhum exercício cadastrado.')
-                  else
-                    ...p.exercises.map(
-                      (ex) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('• ${ex.name} — ${ex.sets}x${ex.reps}'),
-                      ),
-                    )
+                  TrainingDaysView(days: p.days)
                 else
                   Text(p.dietContent.isEmpty ? 'Nenhum conteúdo cadastrado.' : p.dietContent),
               ],
@@ -238,6 +264,14 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
           ),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _openEditPlan(p, allPlansForStudent);
+            },
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
+          ),
           if (p.type == PlanType.training)
             TextButton.icon(
               onPressed: () => _downloadTrainingPdf(p),
@@ -268,26 +302,33 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('IMC: ${e.bmi.toStringAsFixed(1)} · % Gordura: ${e.bodyFat.toStringAsFixed(1)}% · '
-                    '% Magra: ${e.leanMassPercent.toStringAsFixed(1)}%'),
+                LabeledValue(label: 'Peso', value: '${e.weight.toStringAsFixed(1)} kg'),
+                LabeledValue(label: 'IMC', value: e.bmi.toStringAsFixed(1)),
+                LabeledValue(label: '% Gordura', value: '${e.bodyFat.toStringAsFixed(1)}%'),
+                LabeledValue(label: '% Massa magra', value: '${e.leanMassPercent.toStringAsFixed(1)}%'),
                 const Divider(height: 24),
                 Text('Circunferências (cm)', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 6),
-                Text('Pescoço: ${e.neck.toStringAsFixed(1)} · Ombros: ${e.shoulders.toStringAsFixed(1)}'),
-                Text('Tórax: ${e.chest.toStringAsFixed(1)} · Cintura: ${e.waist.toStringAsFixed(1)}'),
-                Text('Quadril: ${e.hip.toStringAsFixed(1)}'),
-                Text('Bíceps D/E: ${e.armRight.toStringAsFixed(1)} / ${e.armLeft.toStringAsFixed(1)}'),
-                Text('Antebraço D/E: ${e.forearmRight.toStringAsFixed(1)} / ${e.forearmLeft.toStringAsFixed(1)}'),
-                Text('Coxa D/E: ${e.thighRight.toStringAsFixed(1)} / ${e.thighLeft.toStringAsFixed(1)}'),
-                Text('Panturrilha D/E: ${e.calfRight.toStringAsFixed(1)} / ${e.calfLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Pescoço', value: e.neck.toStringAsFixed(1)),
+                LabeledValue(label: 'Ombros', value: e.shoulders.toStringAsFixed(1)),
+                LabeledValue(label: 'Tórax', value: e.chest.toStringAsFixed(1)),
+                LabeledValue(label: 'Cintura', value: e.waist.toStringAsFixed(1)),
+                LabeledValue(label: 'Quadril', value: e.hip.toStringAsFixed(1)),
+                LabeledValue(label: 'Bíceps (D/E)', value: '${e.armRight.toStringAsFixed(1)} / ${e.armLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Antebraço (D/E)', value: '${e.forearmRight.toStringAsFixed(1)} / ${e.forearmLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Coxa (D/E)', value: '${e.thighRight.toStringAsFixed(1)} / ${e.thighLeft.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Panturrilha (D/E)', value: '${e.calfRight.toStringAsFixed(1)} / ${e.calfLeft.toStringAsFixed(1)}'),
                 const Divider(height: 24),
                 Text('Dobras cutâneas — mm (soma: ${e.skinfoldSum.toStringAsFixed(1)})',
                     style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 6),
-                Text('Peitoral: ${e.skinfoldChest.toStringAsFixed(1)} · Abdominal: ${e.skinfoldAbdominal.toStringAsFixed(1)}'),
-                Text('Coxa: ${e.skinfoldThigh.toStringAsFixed(1)} · Tríceps: ${e.skinfoldTriceps.toStringAsFixed(1)}'),
-                Text('Subescapular: ${e.skinfoldSubscapular.toStringAsFixed(1)} · Supra-ilíaca: ${e.skinfoldSuprailiac.toStringAsFixed(1)}'),
-                Text('Axilar média: ${e.skinfoldMidaxillary.toStringAsFixed(1)}'),
+                LabeledValue(label: 'Peitoral', value: e.skinfoldChest.toStringAsFixed(1)),
+                LabeledValue(label: 'Abdominal', value: e.skinfoldAbdominal.toStringAsFixed(1)),
+                LabeledValue(label: 'Coxa', value: e.skinfoldThigh.toStringAsFixed(1)),
+                LabeledValue(label: 'Tríceps', value: e.skinfoldTriceps.toStringAsFixed(1)),
+                LabeledValue(label: 'Subescapular', value: e.skinfoldSubscapular.toStringAsFixed(1)),
+                LabeledValue(label: 'Supra-ilíaca', value: e.skinfoldSuprailiac.toStringAsFixed(1)),
+                LabeledValue(label: 'Axilar média', value: e.skinfoldMidaxillary.toStringAsFixed(1)),
               ],
             ),
           ),
@@ -425,11 +466,9 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   }
 
   Widget _buildEvolucaoTab() {
-    return StreamBuilder<List<Evaluation>>(
-      stream: _evaluationsStream,
-      initialData: const [],
-      builder: (context, snapshot) {
-        final records = (snapshot.data ?? const <Evaluation>[]).toList()
+    return Builder(
+      builder: (context) {
+        final records = _evaluations.toList()
           ..sort((a, b) => a.date.compareTo(b.date));
         final latest = records.isEmpty ? null : records.last;
         final category = evaluationMetricCategories[categoryIndex];
@@ -517,7 +556,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                   const Card(
                     child: Padding(
                       padding: EdgeInsets.all(18),
-                      child: Text('Lance mais uma avaliação para ver os gráficos de evolução.'),
+                      child: Text('Registre mais uma avaliação para ver os gráficos.'),
                     ),
                   ),
                 const SizedBox(height: 8),
@@ -531,10 +570,10 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                   ...records.reversed.map(
                     (e) => Card(
                       child: ListTile(
-                        title: Text(formatDate(e.date)),
+                        title: Text('Data: ${formatDate(e.date)}'),
                         subtitle: Text(
-                          '${e.weight.toStringAsFixed(1)} kg · IMC ${e.bmi.toStringAsFixed(1)} · '
-                          '${e.bodyFat.toStringAsFixed(1)}% gordura · ${e.leanMassPercent.toStringAsFixed(1)}% magra',
+                          'Peso: ${e.weight.toStringAsFixed(1)} kg · IMC: ${e.bmi.toStringAsFixed(1)} · '
+                          '% Gordura: ${e.bodyFat.toStringAsFixed(1)}% · % Massa magra: ${e.leanMassPercent.toStringAsFixed(1)}%',
                         ),
                         trailing: TextButton(
                           onPressed: () => _showEvaluationDetails(e),
@@ -587,11 +626,15 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               ...filteredPlans.map(
                 (p) => Card(
                   child: ListTile(
-                    leading: Icon(isTraining ? Icons.fitness_center : Icons.restaurant, color: isTraining ? kTrainingAccent : kDietAccent),
+                    leading: Icon(isTraining ? Icons.fitness_center : Icons.restaurant, color: Theme.of(context).colorScheme.primary),
                     title: Text(p.title),
-                    subtitle: Text(isTraining ? '${p.exercises.length} exercício(s)' : 'Dieta'),
+                    subtitle: Text(
+                      '${isTraining ? 'Treinos: ${p.days.length} · Exercícios: ${p.exerciseCount}' : 'Tipo: Dieta'}'
+                      '\nAdesão: ${adherenceLabel(p, _checkins)}',
+                    ),
+                    isThreeLine: true,
                     trailing: Text(
-                      '${formatDate(p.startDate)} - ${formatDate(p.endDate)}',
+                      'Vigência: ${formatDate(p.startDate)} - ${formatDate(p.endDate)}',
                       style: p.isActive
                           ? TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)
                           : null,
@@ -600,6 +643,15 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                   ),
                 ),
               ),
+            if (!isTraining) ...[
+              const SizedBox(height: 28),
+              PrescriptionsSection(
+                service: widget.service,
+                student: widget.student,
+                prescriptions: _prescriptions,
+                isPersonal: true,
+              ),
+            ],
             const SizedBox(height: 24),
           ],
         ),
@@ -617,10 +669,10 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Dados', icon: Icon(Icons.badge_outlined, color: kAlunosAccent)),
-              Tab(text: 'Avaliações', icon: Icon(Icons.monitor_weight_outlined, color: kAvaliacoesAccent)),
-              Tab(text: 'Treinos', icon: Icon(Icons.fitness_center, color: kTrainingAccent)),
-              Tab(text: 'Dietas', icon: Icon(Icons.restaurant_menu, color: kDietAccent)),
+              Tab(text: 'Dados', icon: Icon(Icons.badge_outlined)),
+              Tab(text: 'Avaliações', icon: Icon(Icons.monitor_weight_outlined)),
+              Tab(text: 'Treinos', icon: Icon(Icons.fitness_center)),
+              Tab(text: 'Dietas', icon: Icon(Icons.restaurant_menu)),
             ],
           ),
         ),
@@ -630,19 +682,40 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
         // como um stream do Firestore só reenvia o estado atual para
         // quem já estava ouvindo desde o início, a segunda aba a "ligar"
         // (nesse caso, Treinos) ficava sem os dados já existentes.
-        body: StreamBuilder<List<Plan>>(
-          stream: _plansStream,
+        body: StreamBuilder<List<Evaluation>>(
+          stream: _evaluationsStream,
           initialData: const [],
-          builder: (context, planSnapshot) {
-            final allPlans = planSnapshot.data ?? const <Plan>[];
-            return TabBarView(
-              children: [
-                _buildDadosTab(),
-                _buildEvolucaoTab(),
-                _buildTreinosTab(allPlans),
-                _buildDietasTab(allPlans),
-              ],
+          builder: (context, evalSnapshot) {
+            _evaluations = evalSnapshot.data ?? const <Evaluation>[];
+            return StreamBuilder<List<Checkin>>(
+          stream: _checkinsStream,
+          initialData: const [],
+          builder: (context, checkinSnapshot) {
+            _checkins = checkinSnapshot.data ?? const <Checkin>[];
+            return StreamBuilder<List<Prescription>>(
+              stream: _prescriptionsStream,
+              initialData: const [],
+              builder: (context, rxSnapshot) {
+                _prescriptions = rxSnapshot.data ?? const <Prescription>[];
+                return StreamBuilder<List<Plan>>(
+                  stream: _plansStream,
+                  initialData: const [],
+                  builder: (context, planSnapshot) {
+                    final allPlans = planSnapshot.data ?? const <Plan>[];
+                    return TabBarView(
+                      children: [
+                        _buildDadosTab(),
+                        _buildEvolucaoTab(),
+                        _buildTreinosTab(allPlans),
+                        _buildDietasTab(allPlans),
+                      ],
+                    );
+                  },
+                );
+              },
             );
+          },
+        );
           },
         ),
       ),
@@ -666,8 +739,15 @@ class _ResultChip extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text.rich(
+              TextSpan(
+                style: Theme.of(context).textTheme.titleSmall,
+                children: [
+                  TextSpan(text: '$label: '),
+                  TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
           ],
         ),
       );

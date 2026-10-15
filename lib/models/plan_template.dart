@@ -12,7 +12,7 @@ class PlanTemplate {
     required this.title,
     required this.objectiveBase,
     required this.level,
-    this.exercises = const [],
+    this.days = const [],
     this.dietContent = '',
     required this.createdAt,
   });
@@ -28,20 +28,22 @@ class PlanTemplate {
   /// Nível de experiência (ex: "Iniciante", "Intermediário", "Avançado").
   final String level;
 
-  final List<Exercise> exercises;
+  /// Dias da ficha semanal (só para modelos de treino).
+  final List<TrainingDay> days;
+  List<Exercise> get exercises => days.expand((d) => d.exercises).toList();
+  int get exerciseCount => days.fold(0, (sum, d) => sum + d.exercises.length);
   final String dietContent;
   final DateTime createdAt;
 
   factory PlanTemplate.fromFirestore(String id, Map<String, dynamic> data) {
     final created = data['createdAt'] as Timestamp?;
-    final rawExercises = data['exercises'] as List<dynamic>? ?? const [];
     return PlanTemplate(
       id: id,
       type: planTypeFromString(data['type'] as String? ?? 'training'),
       title: data['title'] as String? ?? '',
       objectiveBase: data['objectiveBase'] as String? ?? '',
       level: data['level'] as String? ?? '',
-      exercises: rawExercises.whereType<Map<String, dynamic>>().map(Exercise.fromMap).toList(),
+      days: trainingDaysFromData(data),
       dietContent: data['dietContent'] as String? ?? '',
       createdAt: created?.toDate() ?? DateTime.now(),
     );
@@ -52,7 +54,7 @@ class PlanTemplate {
         'title': title,
         'objectiveBase': objectiveBase,
         'level': level,
-        'exercises': exercises.map((e) => e.toMap()).toList(),
+        'days': days.map((d) => d.toMap()).toList(),
         'dietContent': dietContent,
         'createdAt': Timestamp.fromDate(createdAt),
       };

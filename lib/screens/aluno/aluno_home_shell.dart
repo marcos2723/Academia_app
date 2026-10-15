@@ -6,7 +6,6 @@ import '../../models/notification_record.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
-import '../../utils/app_colors.dart';
 import '../change_password_screen.dart';
 import '../notifications_page.dart';
 import 'aluno_profile_page.dart';
@@ -150,11 +149,11 @@ class _AlunoHomeShellState extends State<AlunoHomeShell> {
                   labelType: NavigationRailLabelType.all,
                   onDestinationSelected: (value) => setState(() => section = value),
                   destinations: const [
-                    NavigationRailDestination(icon: Icon(Icons.person_outline, color: kPerfilAccent), selectedIcon: Icon(Icons.person, color: kPerfilAccent), label: Text('Perfil')),
-                    NavigationRailDestination(icon: Icon(Icons.monitor_weight_outlined, color: kAvaliacoesAccent), selectedIcon: Icon(Icons.monitor_weight, color: kAvaliacoesAccent), label: Text('Avaliações')),
-                    NavigationRailDestination(icon: Icon(Icons.fitness_center_outlined, color: kTrainingAccent), selectedIcon: Icon(Icons.fitness_center, color: kTrainingAccent), label: Text('Treinos')),
-                    NavigationRailDestination(icon: Icon(Icons.restaurant_menu_outlined, color: kDietAccent), selectedIcon: Icon(Icons.restaurant_menu, color: kDietAccent), label: Text('Dietas')),
-                    NavigationRailDestination(icon: Icon(Icons.event_available_outlined, color: kAgendarAccent), selectedIcon: Icon(Icons.event_available, color: kAgendarAccent), label: Text('Agendar')),
+                    NavigationRailDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: Text('Perfil')),
+                    NavigationRailDestination(icon: Icon(Icons.monitor_weight_outlined), selectedIcon: Icon(Icons.monitor_weight), label: Text('Avaliações')),
+                    NavigationRailDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: Text('Treinos')),
+                    NavigationRailDestination(icon: Icon(Icons.restaurant_menu_outlined), selectedIcon: Icon(Icons.restaurant_menu), label: Text('Dietas')),
+                    NavigationRailDestination(icon: Icon(Icons.event_available_outlined), selectedIcon: Icon(Icons.event_available), label: Text('Agendar')),
                   ],
                 ),
               if (!compact) const VerticalDivider(width: 1),
@@ -166,11 +165,11 @@ class _AlunoHomeShellState extends State<AlunoHomeShell> {
                   selectedIndex: section,
                   onDestinationSelected: (value) => setState(() => section = value),
                   destinations: const [
-                    NavigationDestination(icon: Icon(Icons.person_outline, color: kPerfilAccent), selectedIcon: Icon(Icons.person, color: kPerfilAccent), label: 'Perfil'),
-                    NavigationDestination(icon: Icon(Icons.monitor_weight_outlined, color: kAvaliacoesAccent), selectedIcon: Icon(Icons.monitor_weight, color: kAvaliacoesAccent), label: 'Avaliações'),
-                    NavigationDestination(icon: Icon(Icons.fitness_center_outlined, color: kTrainingAccent), selectedIcon: Icon(Icons.fitness_center, color: kTrainingAccent), label: 'Treinos'),
-                    NavigationDestination(icon: Icon(Icons.restaurant_menu_outlined, color: kDietAccent), selectedIcon: Icon(Icons.restaurant_menu, color: kDietAccent), label: 'Dietas'),
-                    NavigationDestination(icon: Icon(Icons.event_available_outlined, color: kAgendarAccent), selectedIcon: Icon(Icons.event_available, color: kAgendarAccent), label: 'Agendar'),
+                    NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
+                    NavigationDestination(icon: Icon(Icons.monitor_weight_outlined), selectedIcon: Icon(Icons.monitor_weight), label: 'Avaliações'),
+                    NavigationDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: 'Treinos'),
+                    NavigationDestination(icon: Icon(Icons.restaurant_menu_outlined), selectedIcon: Icon(Icons.restaurant_menu), label: 'Dietas'),
+                    NavigationDestination(icon: Icon(Icons.event_available_outlined), selectedIcon: Icon(Icons.event_available), label: 'Agendar'),
                   ],
                 )
               : null,

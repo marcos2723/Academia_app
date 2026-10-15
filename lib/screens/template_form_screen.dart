@@ -1,26 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/plan.dart';
+import '../models/plan_template.dart';
 import '../models/callbacks.dart';
-import '../utils/input_formatters.dart';
+import '../widgets/training_days_editor.dart';
 import 'plan_form_screen.dart' show planObjectives, planLevels;
-
-class _ExerciseRow {
-  _ExerciseRow({String name = '', int sets = 3, int reps = 12})
-      : nameController = TextEditingController(text: name),
-        setsController = TextEditingController(text: sets.toString()),
-        repsController = TextEditingController(text: reps.toString());
-
-  final TextEditingController nameController;
-  final TextEditingController setsController;
-  final TextEditingController repsController;
-}
 
 /// Tela dedicada para a personal criar um modelo (template) de ficha de
 /// treino ou dieta — não pertence a nenhum aluno. Depois, na hora de
 /// atribuir um plano a um aluno específico, ela parte de um desses
 /// modelos e ajusta as particularidades daquele aluno.
 class TemplateFormScreen extends StatefulWidget {
-  const TemplateFormScreen({super.key, required this.onSaveTemplate, this.fixedType});
+  const TemplateFormScreen({super.key, required this.onSaveTemplate, this.fixedType, this.existing});
 
   final SaveTemplateCallback onSaveTemplate;
 
@@ -28,41 +18,51 @@ class TemplateFormScreen extends StatefulWidget {
   /// o tipo já vem definido e o seletor some da tela.
   final PlanType? fixedType;
 
+  /// Modelo a editar (null para criar um novo).
+  final PlanTemplate? existing;
+
   @override
   State<TemplateFormScreen> createState() => _TemplateFormScreenState();
 }
 
 class _TemplateFormScreenState extends State<TemplateFormScreen> {
-  late PlanType type = widget.fixedType ?? PlanType.training;
+  late PlanType type = widget.existing?.type ?? widget.fixedType ?? PlanType.training;
   final title = TextEditingController();
   final dietContent = TextEditingController();
-  final List<_ExerciseRow> exercises = [_ExerciseRow()];
+  final TrainingDaysController daysController = TrainingDaysController(startWithOneDay: true);
   String objectiveBase = planObjectives.first;
   String level = planLevels.first;
   bool saving = false;
   String? errorText;
 
-  void _addExerciseRow() => setState(() => exercises.add(_ExerciseRow()));
-
-  void _removeExerciseRow(int index) => setState(() => exercises.removeAt(index));
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      title.text = e.title;
+      dietContent.text = e.dietContent;
+      if (planObjectives.contains(e.objectiveBase)) objectiveBase = e.objectiveBase;
+      if (planLevels.contains(e.level)) level = e.level;
+      if (e.type == PlanType.training) daysController.load(e.days);
+    }
+  }
 
   Future<void> _save() async {
     if (title.text.trim().isEmpty) {
       setState(() => errorText = 'Dê um nome para o modelo.');
       return;
     }
-    List<Exercise> exerciseList = const [];
+    List<TrainingDay> dayList = const [];
     String diet = '';
     if (type == PlanType.training) {
-      exerciseList = exercises
-          .where((row) => row.nameController.text.trim().isNotEmpty)
-          .map((row) => Exercise(
-                name: row.nameController.text.trim(),
-                sets: int.tryParse(row.setsController.text.trim()) ?? 0,
-                reps: int.tryParse(row.repsController.text.trim()) ?? 0,
-              ))
-          .toList();
-      if (exerciseList.isEmpty) {
+      final conflict = daysController.weekdayConflict();
+      if (conflict != null) {
+        setState(() => errorText = conflict);
+        return;
+      }
+      dayList = daysController.build();
+      if (dayList.isEmpty) {
         setState(() => errorText = 'Adicione ao menos um exercício.');
         return;
       }
@@ -79,11 +79,12 @@ class _TemplateFormScreenState extends State<TemplateFormScreen> {
       errorText = null;
     });
     await widget.onSaveTemplate(
+      id: widget.existing?.id,
       type: type,
       title: title.text.trim(),
       objectiveBase: objectiveBase,
       level: level,
-      exercises: exerciseList,
+      days: dayList,
       dietContent: diet,
     );
     if (mounted) Navigator.pop(context);
@@ -94,9 +95,11 @@ class _TemplateFormScreenState extends State<TemplateFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.fixedType == null
-              ? 'Novo modelo'
-              : (type == PlanType.training ? 'Novo modelo de treino' : 'Novo modelo de dieta'),
+          widget.existing != null
+              ? (type == PlanType.training ? 'Editar modelo de treino' : 'Editar modelo de dieta')
+              : widget.fixedType == null
+                  ? 'Novo modelo'
+                  : (type == PlanType.training ? 'Novo modelo de treino' : 'Novo modelo de dieta'),
         ),
       ),
       body: SafeArea(
@@ -104,7 +107,7 @@ class _TemplateFormScreenState extends State<TemplateFormScreen> {
           padding: const EdgeInsets.all(20),
           child: ListView(
             children: [
-              if (widget.fixedType == null) ...[
+              if (widget.fixedType == null && widget.existing == null) ...[
                 SegmentedButton<PlanType>(
                   segments: const [
                     ButtonSegment(value: PlanType.training, label: Text('Treino'), icon: Icon(Icons.fitness_center)),
@@ -146,64 +149,10 @@ class _TemplateFormScreenState extends State<TemplateFormScreen> {
               ),
               const SizedBox(height: 18),
               if (type == PlanType.training) ...[
-                Row(
-                  children: [
-                    Expanded(child: Text('Exercícios', style: Theme.of(context).textTheme.titleMedium)),
-                    TextButton.icon(
-                      onPressed: _addExerciseRow,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Adicionar'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                for (var i = 0; i < exercises.length; i++)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: TextField(
-                              controller: exercises[i].nameController,
-                              decoration: const InputDecoration(labelText: 'Exercício', isDense: true),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: exercises[i].setsController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: integerInputFormatters,
-                              decoration: const InputDecoration(labelText: 'Séries', isDense: true),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: exercises[i].repsController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: integerInputFormatters,
-                              decoration: const InputDecoration(labelText: 'Repetições', isDense: true),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: exercises.length > 1 ? () => _removeExerciseRow(i) : null,
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                Text('Treinos', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                TrainingDaysEditor(controller: daysController),
               ] else ...[
-                Text(
-                  'Monte a dieta livremente: refeições, horários e alimentos.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 10),
                 TextField(
                   controller: dietContent,
                   maxLines: 14,
@@ -227,7 +176,7 @@ class _TemplateFormScreenState extends State<TemplateFormScreen> {
                 onPressed: saving ? null : _save,
                 child: saving
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Salvar modelo'),
+                    : Text(widget.existing == null ? 'Salvar modelo' : 'Salvar alterações'),
               ),
               const SizedBox(height: 24),
             ],

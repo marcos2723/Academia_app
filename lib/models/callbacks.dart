@@ -45,7 +45,7 @@ typedef AddPlanCallback = Future<void> Function({
   required String title,
   required DateTime startDate,
   required DateTime endDate,
-  List<Exercise> exercises,
+  List<TrainingDay> days,
   String dietContent,
   String? linkedPlanId,
   String? templateId,
@@ -55,11 +55,12 @@ typedef AddPlanCallback = Future<void> Function({
 /// Salva um novo template reutilizável na biblioteca e devolve o id
 /// gerado.
 typedef SaveTemplateCallback = Future<String> Function({
+  String? id,
   required PlanType type,
   required String title,
   required String objectiveBase,
   required String level,
-  List<Exercise> exercises,
+  List<TrainingDay> days,
   String dietContent,
 });
 
@@ -74,3 +75,14 @@ typedef AddPersonalCallback = Future<String> Function({
 });
 
 typedef SaveAvailabilityCallback = Future<void> Function(List<AvailabilityRange> ranges);
+
+/// Atualiza uma ficha de treino ou dieta já atribuída a um aluno.
+typedef UpdatePlanCallback = Future<void> Function({
+  required String id,
+  required String title,
+  required DateTime startDate,
+  required DateTime endDate,
+  List<TrainingDay> days,
+  String dietContent,
+  String? linkedPlanId,
+});

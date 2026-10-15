@@ -7,6 +7,8 @@ import '../models/appointment.dart';
 import '../models/personal.dart';
 import '../models/availability.dart';
 import '../models/notification_record.dart';
+import '../models/checkin.dart';
+import '../models/prescription.dart';
 import '../utils/body_composition.dart';
 import '../utils/formatters.dart';
 
@@ -25,6 +27,80 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _availability => _db.collection('availability');
   CollectionReference<Map<String, dynamic>> get _notifications => _db.collection('notifications');
   CollectionReference<Map<String, dynamic>> get _templates => _db.collection('plan_templates');
+  CollectionReference<Map<String, dynamic>> get _checkins => _db.collection('checkins');
+  CollectionReference<Map<String, dynamic>> get _prescriptions => _db.collection('prescriptions');
+
+  // ---------------------------------------------------------------------
+  // Receitas de manipulados
+  // ---------------------------------------------------------------------
+
+  /// Todas as receitas de UM aluno (visão da personal, inclui rascunhos).
+  Stream<List<Prescription>> watchPrescriptionsForStudent(String studentId) {
+    return _prescriptions.where('studentId', isEqualTo: studentId).snapshots().map(_toPrescriptions);
+  }
+
+  /// Receitas visíveis ao aluno: só as assinadas ou canceladas (as regras
+  /// do Firestore escondem os rascunhos, então a consulta precisa filtrar).
+  Stream<List<Prescription>> watchIssuedPrescriptionsForStudent(String studentId) {
+    return _prescriptions
+        .where('studentId', isEqualTo: studentId)
+        .where('status', whereIn: ['signed', 'revoked'])
+        .snapshots()
+        .map(_toPrescriptions);
+  }
+
+  List<Prescription> _toPrescriptions(QuerySnapshot<Map<String, dynamic>> snap) {
+    final list = snap.docs.map((d) => Prescription.fromFirestore(d.id, d.data())).toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  /// Id novo para uma receita.
+  String newPrescriptionId() => _prescriptions.doc().id;
+
+  Future<void> savePrescription(Prescription p) => _prescriptions.doc(p.id).set(p.toMap());
+
+  Future<void> deletePrescription(String id) => _prescriptions.doc(id).delete();
+
+  Future<Personal?> getPersonal(String uid) async {
+    final doc = await _personals.doc(uid).get();
+    final data = doc.data();
+    return data == null ? null : Personal.fromFirestore(doc.id, data);
+  }
+
+  // ---------------------------------------------------------------------
+  // Registros de treino e dieta feitos pelo aluno
+  // ---------------------------------------------------------------------
+
+  /// Registros de UM aluno (filtrados por studentId, como nos planos).
+  Stream<List<Checkin>> watchCheckinsForStudent(String studentId) {
+    return _checkins
+        .where('studentId', isEqualTo: studentId)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => Checkin.fromFirestore(d.id, d.data())).toList());
+  }
+
+  /// Registros recentes de todos os alunos (últimos [days] dias), usados no
+  /// alerta de adesão do painel. Limitado por data para não crescer sem fim.
+  Stream<List<Checkin>> watchRecentCheckins({int days = 30}) {
+    final since = DateTime.now().subtract(Duration(days: days));
+    return _checkins
+        .where('dateKey', isGreaterThanOrEqualTo: Checkin.dateKeyOf(since))
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => Checkin.fromFirestore(d.id, d.data())).toList());
+  }
+
+  /// Grava (ou substitui) o registro do dia: o id é plano + data.
+  Future<void> saveCheckin(Checkin checkin) => _checkins.doc(checkin.id).set(checkin.toMap());
+
+  /// Grava vários registros de uma vez (vários dias seguidos).
+  Future<void> saveCheckins(List<Checkin> checkins) async {
+    final batch = _db.batch();
+    for (final c in checkins) {
+      batch.set(_checkins.doc(c.id), c.toMap());
+    }
+    await batch.commit();
+  }
 
   // ---------------------------------------------------------------------
   // Appointments (agenda)
@@ -194,7 +270,7 @@ class FirestoreService {
     required String title,
     required DateTime startDate,
     required DateTime endDate,
-    List<Exercise> exercises = const [],
+    List<TrainingDay> days = const [],
     String dietContent = '',
     String? linkedPlanId,
     String? templateId,
@@ -208,7 +284,7 @@ class FirestoreService {
       title: title,
       startDate: startDate,
       endDate: endDate,
-      exercises: exercises,
+      days: days,
       dietContent: dietContent,
       linkedPlanId: linkedPlanId,
       templateId: templateId,
@@ -216,6 +292,27 @@ class FirestoreService {
       initialEvaluationId: initialEvaluationId,
     );
     await _plans.add(plan.toMap(ownerUid));
+  }
+
+  /// Edita uma ficha ou dieta já atribuída (os registros do aluno e as
+  /// avaliações de referência continuam como estavam).
+  Future<void> updatePlan({
+    required String id,
+    required String title,
+    required DateTime startDate,
+    required DateTime endDate,
+    List<TrainingDay> days = const [],
+    String dietContent = '',
+    String? linkedPlanId,
+  }) {
+    return _plans.doc(id).update({
+      'title': title,
+      'startDate': Timestamp.fromDate(startDate),
+      'endDate': Timestamp.fromDate(endDate),
+      'days': days.map((d) => d.toMap()).toList(),
+      'dietContent': dietContent,
+      'linkedPlanId': linkedPlanId,
+    });
   }
 
   /// Encerra o ciclo de um plano, "fotografando" a avaliação mais próxima
@@ -238,21 +335,33 @@ class FirestoreService {
         .map((snap) => snap.docs.map((d) => PlanTemplate.fromFirestore(d.id, d.data())).toList());
   }
 
+  /// Cria um modelo novo ou, se [id] vier preenchido, atualiza o existente.
   Future<String> saveTemplate({
+    String? id,
     required PlanType type,
     required String title,
     required String objectiveBase,
     required String level,
-    List<Exercise> exercises = const [],
+    List<TrainingDay> days = const [],
     String dietContent = '',
   }) async {
+    if (id != null) {
+      await _templates.doc(id).update({
+        'title': title,
+        'objectiveBase': objectiveBase,
+        'level': level,
+        'days': days.map((d) => d.toMap()).toList(),
+        'dietContent': dietContent,
+      });
+      return id;
+    }
     final template = PlanTemplate(
       id: '',
       type: type,
       title: title,
       objectiveBase: objectiveBase,
       level: level,
-      exercises: exercises,
+      days: days,
       dietContent: dietContent,
       createdAt: DateTime.now(),
     );
